@@ -3,7 +3,7 @@
 window.APP_CONFIG = {
   // Google Apps Script Web App URL
   // 格式：https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
-  GAS_URL: '',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbw8ZlVNVgjEo6OBVOwl19Xy8DONDh0dkIXplxKK9J4mJEF-5HQZlRUg1DJiPaIC-ofB/exec',
 
   // 預設會議室（若 GAS_URL 為空則使用此列表）
   DEFAULT_ROOMS: [

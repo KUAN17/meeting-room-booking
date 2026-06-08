@@ -270,7 +270,7 @@ function openBookingModal(date, startTime) {
   const d = new Date(date + 'T00:00:00');
   const dayNames = ['日','一','二','三','四','五','六'];
   $('#bm-date-label').textContent = `${fmtDateDisplay(d)}（週${dayNames[d.getDay()]}）`;
-  $('#bm-start-label').textContent = `開始 ${startTime}`;
+  $('#bm-time-label').textContent = `開始 ${startTime}`;
 
   renderDurBtns();
   $('#bm-form').reset();

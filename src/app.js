@@ -104,6 +104,22 @@ async function mockApi(action, p) {
     saveMock();
     return { ok: true };
   }
+  if (action === 'updateBooking') {
+    const idx = mockDB.bookings.findIndex(b => b.id === p.id && b.empId === p.empId);
+    if (idx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
+    const conflict = mockDB.bookings.some(b =>
+      b.id !== p.id && b.status !== 'cancelled' &&
+      b.date === p.date && b.roomId === p.roomId &&
+      p.startTime < b.endTime && p.endTime > b.startTime
+    );
+    if (conflict) return { ok: false, error: '所選時段與現有預約衝突' };
+    Object.assign(mockDB.bookings[idx], {
+      date: p.date, startTime: p.startTime, endTime: p.endTime,
+      name: p.name, dept: p.dept, note: p.note,
+    });
+    saveMock();
+    return { ok: true };
+  }
   return { ok: false, error: 'unknown' };
 }
 
@@ -364,6 +380,8 @@ function setMsg(txt, type = '') {
 }
 
 /* ── 我的預約 ───────────────────────────────────────────────── */
+let myBookingsList = [];  // 存最新查詢結果供編輯用
+
 function initMyBookings() {
   $('#query-btn').addEventListener('click', doQuery);
   $('#query-empid').addEventListener('keydown', e => { if (e.key === 'Enter') doQuery(); });
@@ -375,7 +393,8 @@ async function doQuery() {
   try {
     const res = await apiGet('getMyBookings', { empId });
     hideLoading();
-    renderMyList(res.bookings || []);
+    myBookingsList = res.bookings || [];
+    renderMyList(myBookingsList);
   } catch (err) {
     hideLoading();
     $('#my-list').innerHTML = `<p style="color:var(--gray-400);font-size:.9rem">查詢失敗：${err.message}</p>`;
@@ -392,7 +411,7 @@ function renderMyList(bks) {
     return;
   }
   const todayISO = fmtDateISO(todayMidnight());
-  el.innerHTML = bks.map(b => {
+  el.innerHTML = bks.map((b, idx) => {
     const isPast  = b.date < todayISO;
     const status  = b.status === 'cancelled' ? 'cancelled' : isPast ? 'past' : 'active';
     const label   = { cancelled: '已取消', past: '已結束', active: '有效' }[status];
@@ -407,15 +426,22 @@ function renderMyList(bks) {
       </div>
       <div class="booking-item-actions">
         <span class="badge badge-${status}">${label}</span>
-        ${status === 'active'
-          ? `<button class="btn btn-outline btn-sm" data-id="${b.id}" data-empid="${b.empId}">取消</button>`
-          : ''}
+        ${status === 'active' ? `
+          <button class="btn btn-outline btn-sm" data-action="edit"   data-idx="${idx}">編輯</button>
+          <button class="btn btn-outline btn-sm" data-action="cancel" data-idx="${idx}">取消</button>
+        ` : ''}
       </div>
     </div>`;
   }).join('');
 
-  $$('[data-id]', el).forEach(btn => {
+  $$('[data-action="edit"]', el).forEach(btn => {
     btn.addEventListener('click', () => {
+      openEditModal(myBookingsList[+btn.dataset.idx]);
+    });
+  });
+  $$('[data-action="cancel"]', el).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const bk = myBookingsList[+btn.dataset.idx];
       showModal({
         icon: '⚠️', title: '確定取消預約？', body: '取消後無法復原。',
         cancelLabel: '返回', onCancel: () => {},
@@ -423,7 +449,7 @@ function renderMyList(bks) {
         onClose: async () => {
           showLoading();
           try {
-            const res = await apiGet('cancelBooking', { id: btn.dataset.id, empId: btn.dataset.empid });
+            const res = await apiGet('cancelBooking', { id: bk.id, empId: bk.empId });
             hideLoading();
             if (res.ok) doQuery();
             else showModal({ icon: '❌', title: '取消失敗', body: res.error });
@@ -432,6 +458,148 @@ function renderMyList(bks) {
       });
     });
   });
+}
+
+/* ── 編輯 Modal ─────────────────────────────────────────────── */
+const emState = {
+  id: null, empId: null, roomId: null,
+  date: null, startTime: null, endTime: null,
+  bookingsCache: {},
+};
+
+function openEditModal(bk) {
+  emState.id        = bk.id;
+  emState.empId     = bk.empId;
+  emState.roomId    = bk.roomId || cfg.ROOM.id;
+  emState.date      = bk.date;
+  emState.startTime = bk.startTime;
+  emState.endTime   = bk.endTime;
+  emState.bookingsCache = {};
+
+  $('#em-name').value  = bk.name;
+  $('#em-empid').value = bk.empId;
+  $('#em-dept').value  = bk.dept || '';
+  $('#em-note').value  = bk.note || '';
+  $('#em-msg').textContent = '';
+
+  buildEditDateSel();
+  $('#em-overlay').classList.remove('hidden');
+}
+
+function closeEditModal() { $('#em-overlay').classList.add('hidden'); }
+
+function buildEditDateSel() {
+  const t = todayMidnight();
+  const DAY_NAMES = ['日','一','二','三','四','五','六'];
+  const opts = [];
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(t);
+    d.setDate(t.getDate() + i);
+    const iso = fmtDateISO(d);
+    opts.push(`<option value="${iso}" ${iso === emState.date ? 'selected' : ''}>` +
+      `${fmtDateDisplay(d)}（週${DAY_NAMES[d.getDay()]}）</option>`);
+  }
+  $('#em-date-sel').innerHTML = opts.join('');
+  loadEditBookingsAndBuildTime(emState.date);
+  $('#em-date-sel').onchange = () => {
+    emState.date = $('#em-date-sel').value;
+    loadEditBookingsAndBuildTime(emState.date);
+  };
+}
+
+async function loadEditBookingsAndBuildTime(date) {
+  if (!emState.bookingsCache[date]) {
+    showLoading();
+    try {
+      const res = await apiGet('getBookings', { date, roomId: emState.roomId });
+      // 排除自己，才能正確判斷衝突
+      emState.bookingsCache[date] = (res.bookings || []).filter(b => b.id !== emState.id);
+    } catch { emState.bookingsCache[date] = []; }
+    finally { hideLoading(); }
+  }
+  buildEditTimeSelects(emState.bookingsCache[date]);
+}
+
+function buildEditTimeSelects(otherBks) {
+  const startSel = $('#em-start-sel');
+  const endSel   = $('#em-end-sel');
+
+  function getLimit(startMin) {
+    let limit = cfg.END_HOUR * 60;
+    otherBks.forEach(b => {
+      const s = timeToMin(b.startTime);
+      if (s > startMin) limit = Math.min(limit, s);
+    });
+    return limit;
+  }
+
+  startSel.innerHTML = SLOTS.map(s =>
+    `<option value="${s}" ${s === emState.startTime ? 'selected' : ''}>${s}</option>`
+  ).join('');
+
+  function refreshEndSel() {
+    const startMin = timeToMin(startSel.value);
+    const limitMin = getLimit(startMin);
+    endSel.innerHTML = END_SLOTS
+      .filter(s => timeToMin(s) > startMin && timeToMin(s) <= limitMin)
+      .map(s => `<option value="${s}" ${s === emState.endTime ? 'selected' : ''}>${s}</option>`)
+      .join('');
+    if (!endSel.value) {
+      const preferred = minToTime(startMin + 60);
+      const opts = [...endSel.options].map(o => o.value);
+      endSel.value = opts.includes(preferred) ? preferred : opts[opts.length - 1] || '';
+    }
+    emState.endTime = endSel.value;
+    const warn = $('#em-dur-warn');
+    if (limitMin < cfg.END_HOUR * 60) {
+      warn.textContent = `${minToTime(limitMin)} 起已有預約，結束時間最晚至 ${minToTime(limitMin)}`;
+      warn.classList.remove('hidden');
+    } else { warn.classList.add('hidden'); }
+  }
+
+  refreshEndSel();
+  startSel.onchange = () => { emState.startTime = startSel.value; refreshEndSel(); };
+  endSel.onchange   = () => { emState.endTime = endSel.value; };
+}
+
+function initEditForm() {
+  $('#em-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name      = $('#em-name').value.trim();
+    const dept      = $('#em-dept').value.trim();
+    const note      = $('#em-note').value.trim();
+    const date      = $('#em-date-sel').value;
+    const startTime = $('#em-start-sel').value;
+    const endTime   = $('#em-end-sel').value;
+
+    if (!name) { setEditMsg('請填寫姓名', 'error'); return; }
+    if (timeToMin(endTime) <= timeToMin(startTime)) { setEditMsg('結束時間須晚於開始時間', 'error'); return; }
+
+    showLoading();
+    try {
+      const res = await apiGet('updateBooking', {
+        id: emState.id, empId: emState.empId, roomId: emState.roomId,
+        date, startTime, endTime, name, dept, note,
+      });
+      hideLoading();
+      if (res.ok) {
+        saveMemory(name, emState.empId, dept);
+        closeEditModal();
+        showModal({
+          icon: '✅', title: '修改成功！',
+          body: `已更新為 ${date} ${startTime}–${endTime}`,
+          onClose: () => { doQuery(); loadWeek(state.weekMonday); },
+        });
+      } else {
+        setEditMsg(res.error || '修改失敗', 'error');
+      }
+    } catch (err) { hideLoading(); setEditMsg(err.message, 'error'); }
+  });
+}
+function setEditMsg(txt, type = '') {
+  const el = $('#em-msg');
+  el.textContent = txt;
+  el.className = 'form-msg' + (type ? ' ' + type : '');
 }
 
 /* ── 初始化 ─────────────────────────────────────────────────── */
@@ -447,8 +615,12 @@ function init() {
   $('#bm-close-x').addEventListener('click', closeBmModal);
   $('#bm-cancel-btn').addEventListener('click', closeBmModal);
   $('#bm-overlay').addEventListener('click', e => { if (e.target === $('#bm-overlay')) closeBmModal(); });
+  $('#em-close-x').addEventListener('click', closeEditModal);
+  $('#em-cancel-btn').addEventListener('click', closeEditModal);
+  $('#em-overlay').addEventListener('click', e => { if (e.target === $('#em-overlay')) closeEditModal(); });
   $('#modal-overlay').addEventListener('click', e => { if (e.target === $('#modal-overlay')) hideGenericModal(); });
   initBmForm();
+  initEditForm();
   initMyBookings();
   loadWeek(getMondayOf(new Date()));
 }

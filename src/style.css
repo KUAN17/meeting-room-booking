@@ -292,6 +292,7 @@ body {
   box-shadow: 0 0 0 3px rgba(37,99,235,.1);
 }
 .form-group textarea { resize: vertical; }
+.input-disabled { background: var(--gray-100); color: var(--gray-400); cursor: not-allowed; }
 .bm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
 .form-msg { font-size: .83rem; min-height: 18px; }
 .form-msg.error { color: var(--danger); }

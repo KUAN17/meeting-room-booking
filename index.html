@@ -121,6 +121,58 @@
   </div>
 </div>
 
+<!-- ── 編輯 Modal ── -->
+<div id="em-overlay" class="modal-overlay hidden">
+  <div class="modal bm-modal">
+    <button id="em-close-x" class="modal-close-x">✕</button>
+    <h2 class="bm-title">編輯預約</h2>
+
+    <div class="bm-date-row">
+      <label class="field-label" style="margin-bottom:6px">預約日期</label>
+      <select id="em-date-sel" class="time-select" style="max-width:220px"></select>
+    </div>
+
+    <div class="bm-time-row" style="margin-top:12px">
+      <div class="bm-time-field">
+        <label class="field-label">開始時間</label>
+        <select id="em-start-sel" class="time-select"></select>
+      </div>
+      <div class="bm-time-arrow">→</div>
+      <div class="bm-time-field">
+        <label class="field-label">結束時間</label>
+        <select id="em-end-sel" class="time-select"></select>
+      </div>
+    </div>
+    <p id="em-dur-warn" class="dur-warn hidden"></p>
+
+    <form id="em-form" class="bm-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label>姓名 <span class="req">*</span></label>
+          <input id="em-name" type="text" required />
+        </div>
+        <div class="form-group">
+          <label>員工編號</label>
+          <input id="em-empid" type="text" disabled class="input-disabled" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>部門</label>
+        <input id="em-dept" type="text" />
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="em-note" rows="2"></textarea>
+      </div>
+      <div class="bm-actions">
+        <button type="button" id="em-cancel-btn" class="btn btn-outline">取消</button>
+        <button type="submit" class="btn btn-primary">儲存變更</button>
+      </div>
+      <p id="em-msg" class="form-msg"></p>
+    </form>
+  </div>
+</div>
+
 <div id="loading-overlay" class="loading-overlay hidden">
   <div class="spinner"></div>
 </div>

@@ -69,6 +69,7 @@ function handleRequest(e, isPost) {
       case 'getMyBookings': result = getMyBookings(params); break;
       case 'createBooking': result = createBooking(params); break;
       case 'cancelBooking': result = cancelBooking(params); break;
+      case 'updateBooking': result = updateBooking(params); break;
       default:              result = { ok: false, error: 'Unknown action' };
     }
     return jsonRes(result);
@@ -215,6 +216,34 @@ function cancelBooking({ id, empId, email }) {
     }
   }
   return { ok: false, error: '找不到預約，或員工編號 / Email 不符' };
+}
+
+function updateBooking({ id, empId, roomId, date, startTime, endTime, name, dept, note }) {
+  const sheet = getOrCreateBookingsSheet();
+  const data  = sheet.getDataRange().getValues();
+
+  let rowIdx = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][COL.ID]) === String(id) &&
+        String(data[i][COL.EMP_ID]).toLowerCase() === empId.toLowerCase()) {
+      rowIdx = i; break;
+    }
+  }
+  if (rowIdx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
+
+  // 衝突檢查（排除自己）
+  const existing = getBookings({ date, roomId }).bookings.filter(b => b.id !== id);
+  const conflict  = existing.some(b => startTime < b.endTime && endTime > b.startTime);
+  if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
+
+  const r = rowIdx + 1;
+  sheet.getRange(r, COL.DATE  + 1).setValue(date);
+  sheet.getRange(r, COL.START + 1).setValue(startTime);
+  sheet.getRange(r, COL.END   + 1).setValue(endTime);
+  sheet.getRange(r, COL.NAME  + 1).setValue(name  || '');
+  sheet.getRange(r, COL.DEPT  + 1).setValue(dept  || '');
+  sheet.getRange(r, COL.NOTE  + 1).setValue(note  || '');
+  return { ok: true };
 }
 
 // ── 輔助 ─────────────────────────────────────────────────────

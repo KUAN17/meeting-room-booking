@@ -146,8 +146,8 @@ function getBookings({ date, roomId }) {
   const rows = readBookings();
   const bookings = rows
     .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
-    .filter(r => !date   || String(r[COL.DATE])    === date)
-    .filter(r => !roomId || String(r[COL.ROOM_ID]) === roomId)
+    .filter(r => !date   || toDateISO(r[COL.DATE])   === date)
+    .filter(r => !roomId || String(r[COL.ROOM_ID])   === roomId)
     .map(rowToObj);
   return { ok: true, bookings };
 }

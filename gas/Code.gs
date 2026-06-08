@@ -231,22 +231,43 @@ function getOrCreateBookingsSheet() {
   return sheet;
 }
 
+// Google Sheets 會自動將日期/時間字串轉為 Date 物件，讀回時需還原為字串
+function toDateISO(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(val);
+}
+function toTimeStr(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  // 若為數字（Sheets 內部時間值 0~1）
+  if (typeof val === 'number') {
+    const totalMin = Math.round(val * 24 * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+  return String(val);
+}
+
 function rowToObj(r) {
   return {
     id:        String(r[COL.ID]),
-    date:      String(r[COL.DATE]),
-    startTime: String(r[COL.START]),
-    endTime:   String(r[COL.END]),
-    dept:      String(r[COL.DEPT]),
-    name:      String(r[COL.NAME]),
-    empId:     String(r[COL.EMP_ID]),
-    createdAt: String(r[COL.CREATED]),
-    roomId:    String(r[COL.ROOM_ID]),
-    roomName:  String(r[COL.ROOM_NAME]),
-    status:    String(r[COL.STATUS]),
-    title:     String(r[COL.TITLE]),
-    email:     String(r[COL.EMAIL]),
-    attendees: Number(r[COL.ATTENDEES]),
-    note:      String(r[COL.NOTE]),
+    date:      toDateISO(r[COL.DATE]),
+    startTime: toTimeStr(r[COL.START]),
+    endTime:   toTimeStr(r[COL.END]),
+    dept:      String(r[COL.DEPT]   || ''),
+    name:      String(r[COL.NAME]   || ''),
+    empId:     String(r[COL.EMP_ID] || ''),
+    createdAt: String(r[COL.CREATED]|| ''),
+    roomId:    String(r[COL.ROOM_ID]  || ''),
+    roomName:  String(r[COL.ROOM_NAME]|| ''),
+    status:    String(r[COL.STATUS]   || ''),
+    title:     String(r[COL.TITLE]    || ''),
+    email:     String(r[COL.EMAIL]    || ''),
+    attendees: Number(r[COL.ATTENDEES]|| 0),
+    note:      String(r[COL.NOTE]     || ''),
   };
 }

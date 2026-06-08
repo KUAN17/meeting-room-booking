@@ -58,6 +58,7 @@ async function apiGet(action, params = {}) {
   const url = new URL(cfg.GAS_URL);
   url.searchParams.set('action', action);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  url.searchParams.set('_t', Date.now());  // 防止瀏覽器快取
   const res = await fetch(url.toString(), { redirect: 'follow' });
   if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`);
   const text = await res.text();

@@ -153,27 +153,43 @@ function navigate(view) {
 }
 
 /* ── 週曆：載入 ──────────────────────────────────────────────── */
+function getWeekDates(monday) {
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(monday); d.setDate(d.getDate() + i); return d;
+  });
+}
+
+async function fetchAndStore(dates) {
+  const startDate = fmtDateISO(dates[0]);
+  const endDate   = fmtDateISO(dates[4]);
+  try {
+    const res = await apiGet('getWeekBookings', { startDate, endDate, roomId: cfg.ROOM.id });
+    const all = res.bookings || [];
+    dates.forEach(d => {
+      const iso = fmtDateISO(d);
+      state.weekBookings[iso] = all.filter(b => b.date === iso);
+    });
+  } catch {
+    dates.forEach(d => { state.weekBookings[fmtDateISO(d)] = []; });
+  }
+}
+
+// 切換週（使用者主動操作）：清空畫面 + 顯示 loading
 async function loadWeek(monday) {
   state.weekMonday = monday;
   updateWeekLabel();
   $('#week-grid').innerHTML = '<div class="loading-box">載入中…</div>';
   showLoading();
-  const dates = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(monday); d.setDate(d.getDate() + i); return d;
-  });
-  // 單次批次請求取得整週資料（5 個請求 → 1 個）
-  const startDate = fmtDateISO(dates[0]);
-  const endDate   = fmtDateISO(dates[4]);
-  let allBookings = [];
-  try {
-    const res = await apiGet('getWeekBookings', { startDate, endDate, roomId: cfg.ROOM.id });
-    allBookings = res.bookings || [];
-  } catch { allBookings = []; }
-  dates.forEach(d => {
-    const iso = fmtDateISO(d);
-    state.weekBookings[iso] = allBookings.filter(b => b.date === iso);
-  });
+  const dates = getWeekDates(monday);
+  await fetchAndStore(dates);
   hideLoading();
+  renderWeekGrid(dates);
+}
+
+// 存檔後靜默刷新：畫面不閃、不顯示 spinner，資料到了直接更新
+async function silentRefreshWeek() {
+  const dates = getWeekDates(state.weekMonday);
+  await fetchAndStore(dates);
   renderWeekGrid(dates);
 }
 
@@ -393,7 +409,7 @@ function initBmForm() {
         showModal({
           icon: '✅', title: '預約成功！',
           body: `${cfg.ROOM.name} ${state.bm.date} ${startTime}–${endTime}`,
-          onClose: () => loadWeek(state.weekMonday),
+          onClose: () => silentRefreshWeek(),
         });
       } else {
         setMsg(res.error || '預約失敗，請稍後再試', 'error');
@@ -481,7 +497,7 @@ function renderMyList(bks) {
           try {
             const res = await apiGet('cancelBooking', { id: bk.id, empId: bk.empId });
             hideLoading();
-            if (res.ok) { doQuery(); loadWeek(state.weekMonday); }
+            if (res.ok) { doQuery(); silentRefreshWeek(); }
             else showModal({ icon: '❌', title: '取消失敗', body: res.error });
           } catch (err) { hideLoading(); showModal({ icon: '❌', title: '錯誤', body: err.message }); }
         },
@@ -618,7 +634,7 @@ function initEditForm() {
         showModal({
           icon: '✅', title: '修改成功！',
           body: `已更新為 ${date} ${startTime}–${endTime}`,
-          onClose: () => { doQuery(); loadWeek(state.weekMonday); },
+          onClose: () => { doQuery(); silentRefreshWeek(); },
         });
       } else {
         setEditMsg(res.error || '修改失敗', 'error');

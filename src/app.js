@@ -173,6 +173,8 @@ function updateWeekLabel() {
 }
 
 /* ── 週曆：渲染 ──────────────────────────────────────────────── */
+const weekBookingMap = {};  // id → booking，供點擊格子時取用
+
 function renderWeekGrid(dates) {
   const now      = new Date();
   const todayISO = fmtDateISO(todayMidnight());
@@ -182,8 +184,12 @@ function renderWeekGrid(dates) {
   const consumedByDay = dates.map(() => new Set());
   const bookingStart  = dates.map(() => ({}));
 
+  // 清空並重建 booking map
+  Object.keys(weekBookingMap).forEach(k => delete weekBookingMap[k]);
+
   dates.forEach((date, di) => {
     const bks = state.weekBookings[fmtDateISO(date)] || [];
+    bks.forEach(b => { weekBookingMap[b.id] = b; });  // 存入 map
     SLOTS.forEach(slot => {
       if (consumedByDay[di].has(slot)) return;
       const slotM = timeToMin(slot);
@@ -217,7 +223,8 @@ function renderWeekGrid(dates) {
         const endM    = timeToMin(bk.endTime);
         const rowspan = Math.round((endM - slotM) / 30);
         const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
-        return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}" rowspan="${rowspan}">
+        return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}"
+                    rowspan="${rowspan}" data-bk-id="${bk.id}">
           <div class="booked-name">${bk.name}</div>
           <div class="booked-dept">${bk.dept || ''}</div>
           <div class="booked-time">${bk.startTime}–${bk.endTime}</div>
@@ -239,8 +246,17 @@ function renderWeekGrid(dates) {
       <tbody>${bodyRows}</tbody>
     </table>`;
 
+  // 空格 → 新增預約
   $$('.slot-empty:not(.past)', $('#week-grid')).forEach(td => {
     td.addEventListener('click', () => openBookingModal(td.dataset.date, td.dataset.time));
+  });
+
+  // 已預約格子 → 編輯
+  $$('.slot-booked:not(.past)', $('#week-grid')).forEach(td => {
+    td.addEventListener('click', () => {
+      const bk = weekBookingMap[td.dataset.bkId];
+      if (bk) openEditModal(bk);
+    });
   });
 }
 

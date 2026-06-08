@@ -1,19 +1,44 @@
 /**
  * 會議室預約系統 — Google Apps Script 後端
  *
+ * Google Sheet 欄位順序（bookings 工作表）：
+ *   A: id        B: date       C: start_time  D: end_time
+ *   E: dept      F: name       G: emp_id      H: created_at
+ *   I: room_id   J: room_name  K: status      L: title
+ *   M: email     N: attendees  O: note
+ *
  * 部署方式：
  *   1. 在 Google Sheets 開啟「擴充功能 > Apps Script」
- *   2. 將此檔案貼入編輯器（取代預設的 Code.gs）
- *   3. 執行 setupSheets() 建立工作表結構
- *   4. 部署 > 新增部署 > 類型選「網頁應用程式」
+ *   2. 將此檔案內容貼入編輯器（取代預設的 Code.gs）
+ *   3. 執行 setupSheets() → 會自動補齊缺少的欄位標題
+ *   4. 部署 > 新增部署 > 類型「網頁應用程式」
  *      - 執行身分：我（試算表擁有者）
  *      - 存取權限：所有人
  *   5. 複製 Web App URL，貼入 src/config.js 的 GAS_URL
  */
 
 // ── 設定 ────────────────────────────────────────────────────
-const SHEET_BOOKINGS = '預約紀錄';
-const SHEET_ROOMS    = '會議室';
+const SHEET_BOOKINGS = 'bookings';
+const SHEET_ROOMS    = 'rooms';
+
+// 欄位索引（0-based）
+const COL = {
+  ID:        0,   // A
+  DATE:      1,   // B
+  START:     2,   // C start_time
+  END:       3,   // D end_time
+  DEPT:      4,   // E
+  NAME:      5,   // F
+  EMP_ID:    6,   // G
+  CREATED:   7,   // H created_at
+  ROOM_ID:   8,   // I
+  ROOM_NAME: 9,   // J
+  STATUS:    10,  // K
+  TITLE:     11,  // L
+  EMAIL:     12,  // M
+  ATTENDEES: 13,  // N
+  NOTE:      14,  // O
+};
 
 const ROOMS_DEFAULT = [
   { id: 'R01', name: '第一會議室', capacity: 10, floor: '3F', features: '投影機,白板' },
@@ -23,14 +48,10 @@ const ROOMS_DEFAULT = [
 ];
 
 // ── 進入點 ───────────────────────────────────────────────────
-function doGet(e) {
-  return handleRequest(e);
-}
-function doPost(e) {
-  return handleRequest(e, true);
-}
+function doGet(e)  { return handleRequest(e, false); }
+function doPost(e) { return handleRequest(e, true);  }
 
-function handleRequest(e, isPost = false) {
+function handleRequest(e, isPost) {
   try {
     let action, params;
     if (isPost) {
@@ -41,142 +62,191 @@ function handleRequest(e, isPost = false) {
       action = e.parameter.action;
       params = e.parameter;
     }
-
     let result;
     switch (action) {
-      case 'getRooms':      result = getRooms();              break;
-      case 'getBookings':   result = getBookings(params);     break;
-      case 'getMyBookings': result = getMyBookings(params);   break;
-      case 'createBooking': result = createBooking(params);   break;
-      case 'cancelBooking': result = cancelBooking(params);   break;
+      case 'getRooms':      result = getRooms();            break;
+      case 'getBookings':   result = getBookings(params);   break;
+      case 'getMyBookings': result = getMyBookings(params); break;
+      case 'createBooking': result = createBooking(params); break;
+      case 'cancelBooking': result = cancelBooking(params); break;
       default:              result = { ok: false, error: 'Unknown action' };
     }
-    return jsonResponse(result);
+    return jsonRes(result);
   } catch (err) {
-    return jsonResponse({ ok: false, error: err.message });
+    return jsonRes({ ok: false, error: err.message });
   }
 }
 
-function jsonResponse(data) {
+function jsonRes(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── 工作表操作 ───────────────────────────────────────────────
-function getOrCreateSheet(name, headers) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet   = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-    sheet.appendRow(headers);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, headers.length)
-         .setBackground('#2563eb').setFontColor('#ffffff').setFontWeight('bold');
-  }
-  return sheet;
-}
-
+// ── 初始化工作表（執行一次即可） ─────────────────────────────
 function setupSheets() {
-  // 預約紀錄工作表
-  getOrCreateSheet(SHEET_BOOKINGS, [
-    'ID', '狀態', '會議室ID', '會議室名稱', '日期', '時段',
-    '主題', '姓名', 'Email', '部門', '人數', '備註', '建立時間'
-  ]);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // 會議室工作表
-  const roomSheet = getOrCreateSheet(SHEET_ROOMS, ['ID', '名稱', '容量', '樓層', '設備']);
-  if (roomSheet.getLastRow() <= 1) {
-    ROOMS_DEFAULT.forEach(r => {
-      roomSheet.appendRow([r.id, r.name, r.capacity, r.floor, r.features]);
-    });
+  // bookings 工作表：補齊欄位標題
+  let bSheet = ss.getSheetByName(SHEET_BOOKINGS);
+  if (!bSheet) {
+    bSheet = ss.insertSheet(SHEET_BOOKINGS);
   }
-  SpreadsheetApp.getUi().alert('✅ 工作表建立完成！');
+  const headers = [
+    'id','date','start_time','end_time','dept','name','emp_id','created_at',
+    'room_id','room_name','status','title','email','attendees','note'
+  ];
+  const existing = bSheet.getLastColumn() > 0
+    ? bSheet.getRange(1, 1, 1, bSheet.getLastColumn()).getValues()[0]
+    : [];
+  headers.forEach((h, i) => {
+    if (!existing[i]) bSheet.getRange(1, i + 1).setValue(h);
+  });
+  bSheet.setFrozenRows(1);
+  bSheet.getRange(1, 1, 1, headers.length)
+        .setBackground('#2563eb').setFontColor('#ffffff').setFontWeight('bold');
+
+  // rooms 工作表
+  let rSheet = ss.getSheetByName(SHEET_ROOMS);
+  if (!rSheet) {
+    rSheet = ss.insertSheet(SHEET_ROOMS);
+    rSheet.appendRow(['id','name','capacity','floor','features']);
+    rSheet.setFrozenRows(1);
+    rSheet.getRange(1, 1, 1, 5)
+          .setBackground('#2563eb').setFontColor('#ffffff').setFontWeight('bold');
+    ROOMS_DEFAULT.forEach(r => rSheet.appendRow([r.id, r.name, r.capacity, r.floor, r.features]));
+  }
+
+  SpreadsheetApp.getUi().alert('✅ 工作表設定完成！');
 }
 
 // ── 業務邏輯 ─────────────────────────────────────────────────
 function getRooms() {
-  const sheet = getOrCreateSheet(SHEET_ROOMS, ['ID', '名稱', '容量', '樓層', '設備']);
-  const rows  = sheet.getDataRange().getValues().slice(1);  // skip header
-  const rooms = rows.filter(r => r[0]).map(r => ({
-    id:       String(r[0]),
-    name:     String(r[1]),
-    capacity: Number(r[2]),
-    floor:    String(r[3]),
-    features: String(r[4]).split(',').map(s => s.trim()).filter(Boolean),
-  }));
-  return { ok: true, rooms };
+  const ss     = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet  = ss.getSheetByName(SHEET_ROOMS);
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { ok: true, rooms: ROOMS_DEFAULT.map(r => ({
+      ...r, features: r.features.split(',').map(s => s.trim())
+    })) };
+  }
+  const rows = sheet.getDataRange().getValues().slice(1);
+  return {
+    ok: true,
+    rooms: rows.filter(r => r[0]).map(r => ({
+      id:       String(r[0]),
+      name:     String(r[1]),
+      capacity: Number(r[2]),
+      floor:    String(r[3]),
+      features: String(r[4]).split(',').map(s => s.trim()).filter(Boolean),
+    })),
+  };
 }
 
 function getBookings({ date, roomId }) {
-  const sheet = getOrCreateSheet(SHEET_BOOKINGS, []);
-  const rows  = sheet.getDataRange().getValues().slice(1);
+  const rows = readBookings();
   const bookings = rows
-    .filter(r => r[0] && r[1] !== 'cancelled')
-    .filter(r => (!date   || String(r[4]) === date))
-    .filter(r => (!roomId || String(r[2]) === roomId))
-    .map(rowToBooking);
+    .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
+    .filter(r => !date   || String(r[COL.DATE])    === date)
+    .filter(r => !roomId || String(r[COL.ROOM_ID]) === roomId)
+    .map(rowToObj);
   return { ok: true, bookings };
 }
 
-function getMyBookings({ email }) {
-  const sheet = getOrCreateSheet(SHEET_BOOKINGS, []);
-  const rows  = sheet.getDataRange().getValues().slice(1);
+function getMyBookings({ empId, email }) {
+  const rows = readBookings();
   const bookings = rows
-    .filter(r => r[0] && String(r[8]).toLowerCase() === email.toLowerCase())
-    .map(rowToBooking)
+    .filter(r => r[COL.ID])
+    .filter(r => {
+      if (empId) return String(r[COL.EMP_ID]).toLowerCase() === empId.toLowerCase();
+      if (email) return String(r[COL.EMAIL]).toLowerCase() === email.toLowerCase();
+      return false;
+    })
+    .map(rowToObj)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
   return { ok: true, bookings };
 }
 
 function createBooking(params) {
-  const { roomId, roomName, date, slots, name, email, dept, title, attendees, note } = params;
+  const { roomId, roomName, date, startTime, endTime,
+          dept, name, empId, title, email, attendees, note } = params;
 
-  // 衝突檢查
+  // 衝突檢查（同一會議室、同一天、時間重疊）
   const existing = getBookings({ date, roomId }).bookings;
-  const bookedSlots = new Set(existing.flatMap(b => b.slots));
-  const reqSlots    = Array.isArray(slots) ? slots : JSON.parse(slots);
-  const conflict    = reqSlots.some(s => bookedSlots.has(s));
-  if (conflict) return { ok: false, error: '所選時段已被預約，請重新選擇' };
+  const conflict = existing.some(b => {
+    // 若 [reqStart, reqEnd) 與 [bStart, bEnd) 有交集
+    return startTime < b.endTime && endTime > b.startTime;
+  });
+  if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
 
   const id    = 'BK' + Date.now();
-  const sheet = getOrCreateSheet(SHEET_BOOKINGS, []);
-  sheet.appendRow([
-    id, 'active', roomId, roomName, date, reqSlots.join(','),
-    title, name, email, dept || '', attendees || '', note || '',
-    new Date().toISOString(),
-  ]);
+  const sheet = getOrCreateBookingsSheet();
+  // 按欄位順序寫入
+  const row = new Array(15).fill('');
+  row[COL.ID]        = id;
+  row[COL.DATE]      = date;
+  row[COL.START]     = startTime;
+  row[COL.END]       = endTime;
+  row[COL.DEPT]      = dept      || '';
+  row[COL.NAME]      = name      || '';
+  row[COL.EMP_ID]    = empId     || '';
+  row[COL.CREATED]   = new Date().toISOString();
+  row[COL.ROOM_ID]   = roomId    || '';
+  row[COL.ROOM_NAME] = roomName  || '';
+  row[COL.STATUS]    = 'active';
+  row[COL.TITLE]     = title     || '';
+  row[COL.EMAIL]     = email     || '';
+  row[COL.ATTENDEES] = attendees || '';
+  row[COL.NOTE]      = note      || '';
+  sheet.appendRow(row);
   return { ok: true, bookingId: id };
 }
 
-function cancelBooking({ id, email }) {
-  const sheet = getOrCreateSheet(SHEET_BOOKINGS, []);
+function cancelBooking({ id, empId, email }) {
+  const sheet = getOrCreateBookingsSheet();
   const data  = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(id) &&
-        String(data[i][8]).toLowerCase() === email.toLowerCase()) {
-      sheet.getRange(i + 1, 2).setValue('cancelled');
+    const r = data[i];
+    if (String(r[COL.ID]) !== String(id)) continue;
+    const matchEmp   = empId && String(r[COL.EMP_ID]).toLowerCase() === empId.toLowerCase();
+    const matchEmail = email && String(r[COL.EMAIL]).toLowerCase() === email.toLowerCase();
+    if (matchEmp || matchEmail) {
+      sheet.getRange(i + 1, COL.STATUS + 1).setValue('cancelled');
       return { ok: true };
     }
   }
-  return { ok: false, error: '找不到預約或 Email 不符' };
+  return { ok: false, error: '找不到預約，或員工編號 / Email 不符' };
 }
 
 // ── 輔助 ─────────────────────────────────────────────────────
-function rowToBooking(r) {
+function readBookings() {
+  const sheet = getOrCreateBookingsSheet();
+  if (sheet.getLastRow() <= 1) return [];
+  return sheet.getDataRange().getValues().slice(1);
+}
+
+function getOrCreateBookingsSheet() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet   = ss.getSheetByName(SHEET_BOOKINGS);
+  if (!sheet) { sheet = ss.insertSheet(SHEET_BOOKINGS); }
+  return sheet;
+}
+
+function rowToObj(r) {
   return {
-    id:        String(r[0]),
-    status:    String(r[1]),
-    roomId:    String(r[2]),
-    roomName:  String(r[3]),
-    date:      String(r[4]),
-    slots:     String(r[5]).split(',').filter(Boolean),
-    title:     String(r[6]),
-    name:      String(r[7]),
-    email:     String(r[8]),
-    dept:      String(r[9]),
-    attendees: Number(r[10]),
-    note:      String(r[11]),
-    createdAt: String(r[12]),
+    id:        String(r[COL.ID]),
+    date:      String(r[COL.DATE]),
+    startTime: String(r[COL.START]),
+    endTime:   String(r[COL.END]),
+    dept:      String(r[COL.DEPT]),
+    name:      String(r[COL.NAME]),
+    empId:     String(r[COL.EMP_ID]),
+    createdAt: String(r[COL.CREATED]),
+    roomId:    String(r[COL.ROOM_ID]),
+    roomName:  String(r[COL.ROOM_NAME]),
+    status:    String(r[COL.STATUS]),
+    title:     String(r[COL.TITLE]),
+    email:     String(r[COL.EMAIL]),
+    attendees: Number(r[COL.ATTENDEES]),
+    note:      String(r[COL.NOTE]),
   };
 }

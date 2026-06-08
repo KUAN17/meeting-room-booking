@@ -66,6 +66,9 @@
           <!-- 步驟 3：時段 -->
           <div class="step-card">
             <div class="step-header"><span class="step-num">3</span>選擇時段</div>
+            <p style="font-size:.82rem;color:var(--gray-500);margin-bottom:10px">
+              點選<strong>起始時間</strong>，再點選<strong>結束時間</strong>（例：09:00 → 11:00 表示使用 2 小時）
+            </p>
             <div id="time-slots" class="time-slots">
               <p class="hint">請先選擇會議室與日期</p>
             </div>
@@ -89,8 +92,12 @@
                 <input id="f-name" type="text" placeholder="您的姓名" required />
               </div>
               <div class="form-group">
-                <label for="f-email">電子郵件 <span class="required">*</span></label>
-                <input id="f-email" type="email" placeholder="example@company.com" required />
+                <label for="f-empid">員工編號 <span class="required">*</span></label>
+                <input id="f-empid" type="text" placeholder="員工編號" required />
+              </div>
+              <div class="form-group">
+                <label for="f-email">電子郵件</label>
+                <input id="f-email" type="email" placeholder="example@company.com（選填）" />
               </div>
               <div class="form-group">
                 <label for="f-dept">部門</label>
@@ -124,7 +131,7 @@
         <p>查詢您的預約紀錄</p>
       </div>
       <div class="query-bar">
-        <input id="query-email" type="email" placeholder="輸入您的電子郵件" />
+        <input id="query-empid" type="text" placeholder="輸入員工編號" />
         <button id="query-btn" class="btn btn-primary">查詢</button>
       </div>
       <div id="my-bookings-list" class="bookings-list"></div>

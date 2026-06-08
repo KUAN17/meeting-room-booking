@@ -149,7 +149,7 @@ function setupTriggers() {
     .atHour(2)
     .create();
 
-  SpreadsheetApp.getUi().alert('✅ 自動清理觸發器已設定（每天凌晨 2 點執行）');
+  Logger.log('✅ 自動清理觸發器已設定（每天凌晨 2 點執行）');
 }
 
 // ── 工作表初始化 ─────────────────────────────────────────────

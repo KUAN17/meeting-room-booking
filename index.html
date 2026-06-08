@@ -64,18 +64,20 @@
     <button id="bm-close-x" class="modal-close-x">✕</button>
     <h2 class="bm-title">預約測試室</h2>
 
-    <div class="bm-info">
-      <span id="bm-date-label"></span>
-      <span class="bm-sep">·</span>
-      <span id="bm-time-label"></span>
-    </div>
+    <div class="bm-date-row" id="bm-date-label"></div>
 
-    <div class="bm-duration">
-      <label class="field-label">使用時間</label>
-      <div id="dur-btns" class="dur-btns"></div>
-      <p class="bm-endtime">結束時間：<strong id="bm-end-label"></strong></p>
-      <p id="dur-warn" class="dur-warn hidden"></p>
+    <div class="bm-time-row">
+      <div class="bm-time-field">
+        <label class="field-label">開始時間</label>
+        <select id="bm-start-sel" class="time-select"></select>
+      </div>
+      <div class="bm-time-arrow">→</div>
+      <div class="bm-time-field">
+        <label class="field-label">結束時間</label>
+        <select id="bm-end-sel" class="time-select"></select>
+      </div>
     </div>
+    <p id="dur-warn" class="dur-warn hidden"></p>
 
     <form id="bm-form" class="bm-form" novalidate>
       <div class="form-row">
@@ -88,19 +90,9 @@
           <input id="f-empid" type="text" placeholder="員工編號" required />
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>部門</label>
-          <input id="f-dept" type="text" placeholder="部門（選填）" />
-        </div>
-        <div class="form-group">
-          <label>預計人數 <span class="req">*</span></label>
-          <input id="f-attendees" type="number" min="1" max="50" placeholder="人數" required />
-        </div>
-      </div>
       <div class="form-group">
-        <label>會議主題 <span class="req">*</span></label>
-        <input id="f-title" type="text" placeholder="請填寫會議主題" required />
+        <label>部門</label>
+        <input id="f-dept" type="text" placeholder="部門（選填）" />
       </div>
       <div class="form-group">
         <label>備註</label>

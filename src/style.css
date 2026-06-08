@@ -239,32 +239,36 @@ body {
 
 .bm-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
 
-.bm-info {
-  display: flex; align-items: center; gap: 8px;
+.bm-date-row {
+  font-size: .95rem; font-weight: 600; color: var(--primary);
+  margin-bottom: 14px;
+}
+.bm-time-row {
+  display: flex; align-items: flex-end; gap: 12px;
   background: var(--primary-light);
   border: 1px solid var(--primary-mid);
-  border-radius: 8px; padding: 10px 14px;
-  font-size: .9rem; font-weight: 600; color: var(--primary);
-  margin-bottom: 18px;
+  border-radius: 10px; padding: 12px 16px;
+  margin-bottom: 14px;
 }
-.bm-sep { color: var(--primary-mid); }
-
-.bm-duration { margin-bottom: 18px; }
-.field-label { font-size: .85rem; font-weight: 600; color: var(--gray-700); display: block; margin-bottom: 8px; }
-.dur-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.dur-btn {
-  padding: 5px 12px; border-radius: 20px;
-  border: 1.5px solid var(--gray-200);
-  background: #fff; font-size: .84rem; cursor: pointer;
-  transition: var(--transition); color: var(--gray-700);
+.bm-time-field { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.bm-time-arrow {
+  font-size: 1.1rem; color: var(--primary);
+  padding-bottom: 8px; flex-shrink: 0;
 }
-.dur-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
-.dur-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
-.dur-btn:disabled { opacity: .35; cursor: not-allowed; }
-.bm-endtime { font-size: .85rem; color: var(--gray-500); }
-.bm-endtime strong { color: var(--gray-900); }
+.field-label { font-size: .82rem; font-weight: 600; color: var(--gray-700); display: block; }
+.time-select {
+  padding: 8px 10px;
+  border: 1.5px solid var(--primary-mid);
+  border-radius: 7px; font-size: .95rem;
+  font-family: inherit; color: var(--primary);
+  background: #fff; cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition);
+  width: 100%;
+}
+.time-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
 .dur-warn {
-  margin-top: 6px; font-size: .82rem;
+  margin-bottom: 10px; font-size: .82rem;
   color: var(--danger); background: var(--danger-light);
   border-radius: 6px; padding: 6px 10px;
 }

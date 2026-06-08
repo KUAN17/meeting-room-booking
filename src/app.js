@@ -11,26 +11,21 @@ function minToTime(m) { return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; }
 
 function todayMidnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function fmtDateISO(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function fmtDateDisplay(d) {
-  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
-}
+function fmtDateDisplay(d) { return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`; }
 
-// 產生 30 分鐘為單位的時段列表
 function generateSlots() {
   const slots = [];
-  for (let m = cfg.START_HOUR * 60; m < cfg.END_HOUR * 60; m += 30) {
-    slots.push(minToTime(m));
-  }
+  for (let m = cfg.START_HOUR * 60; m < cfg.END_HOUR * 60; m += 30) slots.push(minToTime(m));
   return slots;
 }
-const SLOTS = generateSlots(); // ['08:00','08:30',...,'17:30']
+const SLOTS = generateSlots();  // ['08:00','08:30',...,'17:30']
+// 結束時間選項包含 18:00
+const END_SLOTS = [...SLOTS.slice(1), minToTime(cfg.END_HOUR * 60)];  // ['08:30',...,'18:00']
 
-// 取得當週的週一日期（Date 物件）
 function getMondayOf(date) {
   const d = new Date(date);
-  const day = d.getDay(); // 0=日
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -39,7 +34,7 @@ function showLoading() { $('#loading-overlay').classList.remove('hidden'); }
 function hideLoading() { $('#loading-overlay').classList.add('hidden'); }
 
 /* ── 通用 Modal ─────────────────────────────────────────────── */
-function showModal({ icon = '', title = '', body = '', closeLabel = '確認', cancelLabel = '', onClose = null, onCancel = null }) {
+function showModal({ icon='', title='', body='', closeLabel='確認', cancelLabel='', onClose=null, onCancel=null }) {
   $('#modal-icon').textContent = icon;
   $('#modal-title').textContent = title;
   $('#modal-body').textContent = body;
@@ -57,24 +52,13 @@ function showModal({ icon = '', title = '', body = '', closeLabel = '確認', ca
 }
 function hideGenericModal() { $('#modal-overlay').classList.add('hidden'); }
 
-/* ── API ────────────────────────────────────────────────────── */
+/* ── API（全部使用 GET，避免 CORS preflight）─────────────────── */
 async function apiGet(action, params = {}) {
   if (!cfg.GAS_URL) return mockApi(action, params);
   const url = new URL(cfg.GAS_URL);
   url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   const res = await fetch(url.toString());
-  if (!res.ok) throw new Error('伺服器錯誤');
-  return res.json();
-}
-async function apiPost(action, body = {}) {
-  if (!cfg.GAS_URL) return mockApi(action, body);
-  const res = await fetch(cfg.GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...body }),
-    mode: 'cors',
-  });
   if (!res.ok) throw new Error('伺服器錯誤');
   return res.json();
 }
@@ -86,12 +70,11 @@ function saveMock() { localStorage.setItem('mock_bk', JSON.stringify(mockDB.book
 async function mockApi(action, p) {
   await new Promise(r => setTimeout(r, 150));
   if (action === 'getBookings') {
-    const list = mockDB.bookings.filter(b =>
+    return { ok: true, bookings: mockDB.bookings.filter(b =>
       b.status !== 'cancelled' &&
       (!p.date   || b.date   === p.date) &&
       (!p.roomId || b.roomId === p.roomId)
-    );
-    return { ok: true, bookings: list };
+    )};
   }
   if (action === 'getMyBookings') {
     return { ok: true, bookings: mockDB.bookings.filter(b => b.empId === p.empId) };
@@ -117,15 +100,20 @@ async function mockApi(action, p) {
   return { ok: false, error: 'unknown' };
 }
 
+/* ── 記憶預約人資訊 ──────────────────────────────────────────── */
+const MEMORY_KEY = 'bk_user';
+function loadMemory() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}'); } catch { return {}; }
+}
+function saveMemory(name, empId, dept) {
+  localStorage.setItem(MEMORY_KEY, JSON.stringify({ name, empId, dept }));
+}
+
 /* ── 狀態 ───────────────────────────────────────────────────── */
 const state = {
-  weekMonday: getMondayOf(new Date()),  // 當前顯示週的週一
-  weekBookings: {},  // { 'YYYY-MM-DD': [...bookings] }
-  bm: {             // booking modal 狀態
-    date: null,
-    startTime: null,
-    duration: cfg.DEFAULT_DURATION,
-  },
+  weekMonday:   getMondayOf(new Date()),
+  weekBookings: {},  // { 'YYYY-MM-DD': [...] }
+  bm: { date: null, startTime: null, endTime: null },
 };
 
 /* ── 導覽 ───────────────────────────────────────────────────── */
@@ -140,20 +128,12 @@ async function loadWeek(monday) {
   updateWeekLabel();
   $('#week-grid').innerHTML = '<div class="loading-box">載入中…</div>';
   showLoading();
-
-  // 週一到週五
   const dates = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    return d;
+    const d = new Date(monday); d.setDate(d.getDate() + i); return d;
   });
-
-  // 並行取得每日預約
   const results = await Promise.all(
     dates.map(d => apiGet('getBookings', { date: fmtDateISO(d), roomId: cfg.ROOM.id })
-      .then(r => r.bookings || [])
-      .catch(() => [])
-    )
+      .then(r => r.bookings || []).catch(() => []))
   );
   dates.forEach((d, i) => { state.weekBookings[fmtDateISO(d)] = results[i]; });
   hideLoading();
@@ -163,7 +143,6 @@ async function loadWeek(monday) {
 function updateWeekLabel() {
   const fri = new Date(state.weekMonday);
   fri.setDate(fri.getDate() + 4);
-  const days = ['日','一','二','三','四','五','六'];
   const m = state.weekMonday;
   $('#w-label').textContent =
     `${m.getFullYear()}/${pad(m.getMonth()+1)}/${pad(m.getDate())}（週一）` +
@@ -177,36 +156,24 @@ function renderWeekGrid(dates) {
   const nowMin   = now.getHours() * 60 + now.getMinutes();
   const DAY_NAMES = ['週一','週二','週三','週四','週五'];
 
-  // 建構每日的「slot → booking」映射，並記錄哪些 slot 已被 rowspan 消耗
-  // consumed[dayIdx] = Set of slot strings that are covered by a previous rowspan
   const consumedByDay = dates.map(() => new Set());
-  // bookingAtSlot[dayIdx][slotIdx] = booking obj or null (only for start slot)
-  const bookingStart = dates.map(() => ({}));  // { slotStr: bookingObj }
+  const bookingStart  = dates.map(() => ({}));
 
   dates.forEach((date, di) => {
-    const iso = fmtDateISO(date);
-    const bks = state.weekBookings[iso] || [];
+    const bks = state.weekBookings[fmtDateISO(date)] || [];
     SLOTS.forEach(slot => {
       if (consumedByDay[di].has(slot)) return;
       const slotM = timeToMin(slot);
-      const bk = bks.find(b =>
-        timeToMin(b.startTime) <= slotM && timeToMin(b.endTime) > slotM
-      );
+      const bk = bks.find(b => timeToMin(b.startTime) <= slotM && timeToMin(b.endTime) > slotM);
       if (!bk) return;
-      // 此 booking 在本 slot 開始渲染（可能 startTime < slot 若時間不對齊）
       bookingStart[di][slot] = bk;
-      // 消耗後續被此 booking 覆蓋的 slot
       const endM = timeToMin(bk.endTime);
-      SLOTS.forEach(s => {
-        const sm = timeToMin(s);
-        if (sm > slotM && sm < endM) consumedByDay[di].add(s);
-      });
+      SLOTS.forEach(s => { if (timeToMin(s) > slotM && timeToMin(s) < endM) consumedByDay[di].add(s); });
     });
   });
 
-  // 建立表格
   const headerCells = dates.map((d, i) => {
-    const iso = fmtDateISO(d);
+    const iso     = fmtDateISO(d);
     const isToday = iso === todayISO;
     return `<th class="${isToday ? 'today-col' : ''}">
       <span class="day-name">${DAY_NAMES[i]}</span>
@@ -214,21 +181,17 @@ function renderWeekGrid(dates) {
     </th>`;
   }).join('');
 
-  const bodyRows = SLOTS.map((slot, si) => {
-    const slotM    = timeToMin(slot);
-    const isHour   = slotM % 60 === 0;
+  const bodyRows = SLOTS.map((slot) => {
+    const slotM  = timeToMin(slot);
+    const isHour = slotM % 60 === 0;
     const timeCell = `<td class="time-cell${isHour ? ' hour-line' : ''}">${isHour ? slot : ''}</td>`;
 
     const dayCells = dates.map((date, di) => {
       const iso = fmtDateISO(date);
-
-      // 已被 rowspan 消耗
       if (consumedByDay[di].has(slot)) return '';
-
       const bk = bookingStart[di][slot];
       if (bk) {
-        // 計算 rowspan：從本 slot 到 booking 結束
-        const endM   = timeToMin(bk.endTime);
+        const endM    = timeToMin(bk.endTime);
         const rowspan = Math.round((endM - slotM) / 30);
         const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
         return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}" rowspan="${rowspan}">
@@ -237,8 +200,6 @@ function renderWeekGrid(dates) {
           <div class="booked-time">${bk.startTime}–${bk.endTime}</div>
         </td>`;
       }
-
-      // 空格
       const isToday = iso === todayISO;
       const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
       return `<td class="slot-empty${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}${isToday ? ' today-col' : ''}"
@@ -255,7 +216,6 @@ function renderWeekGrid(dates) {
       <tbody>${bodyRows}</tbody>
     </table>`;
 
-  // 點選空格 → 開啟預約 modal
   $$('.slot-empty:not(.past)', $('#week-grid')).forEach(td => {
     td.addEventListener('click', () => openBookingModal(td.dataset.date, td.dataset.time));
   });
@@ -265,121 +225,121 @@ function renderWeekGrid(dates) {
 function openBookingModal(date, startTime) {
   state.bm.date      = date;
   state.bm.startTime = startTime;
-  state.bm.duration  = cfg.DEFAULT_DURATION;
+  state.bm.endTime   = minToTime(timeToMin(startTime) + 60);  // 預設 +1 小時
 
+  // 日期標題
   const d = new Date(date + 'T00:00:00');
   const dayNames = ['日','一','二','三','四','五','六'];
   $('#bm-date-label').textContent = `${fmtDateDisplay(d)}（週${dayNames[d.getDay()]}）`;
-  $('#bm-time-label').textContent = `開始 ${startTime}`;
 
-  renderDurBtns();
-  $('#bm-form').reset();
+  // 帶入記憶資訊
+  const mem = loadMemory();
+  if (mem.name)  $('#f-name').value  = mem.name;
+  if (mem.empId) $('#f-empid').value = mem.empId;
+  if (mem.dept)  $('#f-dept').value  = mem.dept;
+
+  $('#f-note').value = '';
   $('#bm-msg').textContent = '';
+
+  buildTimeSelects();
   $('#bm-overlay').classList.remove('hidden');
 }
 
 function closeBmModal() { $('#bm-overlay').classList.add('hidden'); }
 
-function renderDurBtns() {
-  const startM   = timeToMin(state.bm.startTime);
-  const maxEndM  = cfg.END_HOUR * 60;
-  const iso      = state.bm.date;
-  const bks      = (state.weekBookings[iso] || []);
-  // 找最近一個衝突的起始時間
-  let limitM = maxEndM;
+/* 找最近衝突的開始時間（分鐘），用來限制結束時間上限 */
+function getConflictLimit(startMin) {
+  const bks = state.weekBookings[state.bm.date] || [];
+  let limit = cfg.END_HOUR * 60;
   bks.forEach(b => {
-    const bStartM = timeToMin(b.startTime);
-    if (bStartM > startM) limitM = Math.min(limitM, bStartM);
+    const bStart = timeToMin(b.startTime);
+    if (bStart > startMin) limit = Math.min(limit, bStart);
   });
+  return limit;
+}
 
-  const warn = $('#dur-warn');
-  let warnShown = false;
+function buildTimeSelects() {
+  const startSel = $('#bm-start-sel');
+  const endSel   = $('#bm-end-sel');
 
-  $('#dur-btns').innerHTML = cfg.DURATIONS.map(dur => {
-    const endM   = startM + dur * 60;
-    const endStr = minToTime(endM);
-    const tooLong  = endM > maxEndM;
-    const conflict = endM > limitM;
-    const disabled = tooLong || conflict;
-    const label    = dur < 1 ? '30分' : `${dur}小時`;
-    return `<button class="dur-btn${dur === state.bm.duration && !disabled ? ' active' : ''}"
-                    data-dur="${dur}" ${disabled ? 'disabled' : ''}>
-              ${label}
-            </button>`;
-  }).join('');
+  // ── 開始時間選單 ──
+  startSel.innerHTML = SLOTS.map(s =>
+    `<option value="${s}" ${s === state.bm.startTime ? 'selected' : ''}>${s}</option>`
+  ).join('');
 
-  $$('.dur-btn:not([disabled])', $('#dur-btns')).forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.bm.duration = parseFloat(btn.dataset.dur);
-      $$('.dur-btn').forEach(b => b.classList.toggle('active', b === btn));
-      updateBmEndTime();
-    });
-    if (parseFloat(btn.dataset.dur) === state.bm.duration) btn.classList.add('active');
-  });
+  // ── 結束時間選單（依開始時間動態更新）──
+  function refreshEndSel() {
+    const startMin = timeToMin(startSel.value);
+    const limitMin = getConflictLimit(startMin);
 
-  // 若預設 duration 被 disabled，自動選最大可用
-  const activeDur = cfg.DURATIONS.find(d => {
-    const endM = startM + d * 60;
-    return endM <= limitM && endM <= maxEndM;
-  });
-  if (activeDur) {
-    if (startM + state.bm.duration * 60 > limitM ||
-        startM + state.bm.duration * 60 > maxEndM) {
-      state.bm.duration = activeDur;
-      const btn = $(`[data-dur="${activeDur}"]`, $('#dur-btns'));
-      if (btn) btn.classList.add('active');
+    endSel.innerHTML = END_SLOTS
+      .filter(s => timeToMin(s) > startMin && timeToMin(s) <= limitMin)
+      .map(s => `<option value="${s}" ${s === state.bm.endTime ? 'selected' : ''}>${s}</option>`)
+      .join('');
+
+    // 若目前 endTime 超出限制，自動調整
+    if (!endSel.value || timeToMin(endSel.value) > limitMin) {
+      // 選 startMin+60 或最大可用
+      const preferred = minToTime(startMin + 60);
+      const opts = [...endSel.options].map(o => o.value);
+      endSel.value = opts.includes(preferred) ? preferred : opts[opts.length - 1] || '';
+    }
+    state.bm.endTime = endSel.value;
+
+    // 衝突提示
+    const warn = $('#dur-warn');
+    if (limitMin < cfg.END_HOUR * 60) {
+      warn.textContent = `${minToTime(limitMin)} 起已有預約，結束時間最晚至 ${minToTime(limitMin)}`;
+      warn.classList.remove('hidden');
+    } else {
+      warn.classList.add('hidden');
     }
   }
 
-  if (limitM < maxEndM) {
-    warn.textContent = `此時段後 ${minToTime(limitM)} 已有預約，可選時長受限`;
-    warn.classList.remove('hidden');
-  } else {
-    warn.classList.add('hidden');
-  }
+  refreshEndSel();
 
-  updateBmEndTime();
-}
-
-function updateBmEndTime() {
-  const endMin = timeToMin(state.bm.startTime) + state.bm.duration * 60;
-  $('#bm-end-label').textContent = minToTime(endMin);
-  $('#bm-time-label').textContent = `${state.bm.startTime} – ${minToTime(endMin)}`;
+  startSel.onchange = () => {
+    state.bm.startTime = startSel.value;
+    refreshEndSel();
+  };
+  endSel.onchange = () => {
+    state.bm.endTime = endSel.value;
+  };
 }
 
 /* ── 送出預約 ───────────────────────────────────────────────── */
 function initBmForm() {
   $('#bm-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const name      = $('#f-name').value.trim();
-    const empId     = $('#f-empid').value.trim();
-    const dept      = $('#f-dept').value.trim();
-    const title     = $('#f-title').value.trim();
-    const attendees = $('#f-attendees').value.trim();
-    const note      = $('#f-note').value.trim();
+    const name  = $('#f-name').value.trim();
+    const empId = $('#f-empid').value.trim();
+    const dept  = $('#f-dept').value.trim();
+    const note  = $('#f-note').value.trim();
 
-    if (!name || !empId || !title || !attendees) {
-      setMsg('請填寫所有必填欄位', 'error'); return;
+    if (!name || !empId) { setMsg('請填寫姓名與員工編號', 'error'); return; }
+
+    const startTime = $('#bm-start-sel').value;
+    const endTime   = $('#bm-end-sel').value;
+    if (!startTime || !endTime || timeToMin(endTime) <= timeToMin(startTime)) {
+      setMsg('請確認時間設定正確', 'error'); return;
     }
-
-    const startTime = state.bm.startTime;
-    const endTime   = minToTime(timeToMin(startTime) + state.bm.duration * 60);
 
     showLoading();
     try {
-      const res = await apiPost('createBooking', {
-        roomId:    cfg.ROOM.id,
-        roomName:  cfg.ROOM.name,
-        date:      state.bm.date,
+      const res = await apiGet('createBooking', {
+        roomId:   cfg.ROOM.id,
+        roomName: cfg.ROOM.name,
+        date:     state.bm.date,
         startTime, endTime,
-        name, empId, dept, title, attendees, note,
+        name, empId, dept, note,
       });
       hideLoading();
       if (res.ok) {
+        saveMemory(name, empId, dept);
         closeBmModal();
         showModal({
           icon: '✅', title: '預約成功！',
-          body: `${cfg.ROOM.name} ${fmtDateDisplay(new Date(state.bm.date + 'T00:00:00'))} ${startTime}–${endTime} 已完成預約`,
+          body: `${cfg.ROOM.name} ${state.bm.date} ${startTime}–${endTime}`,
           onClose: () => loadWeek(state.weekMonday),
         });
       } else {
@@ -426,16 +386,16 @@ function renderMyList(bks) {
   }
   const todayISO = fmtDateISO(todayMidnight());
   el.innerHTML = bks.map(b => {
-    const isPast = b.date < todayISO;
-    const status = b.status === 'cancelled' ? 'cancelled' : isPast ? 'past' : 'active';
-    const label  = { cancelled: '已取消', past: '已結束', active: '有效' }[status];
+    const isPast  = b.date < todayISO;
+    const status  = b.status === 'cancelled' ? 'cancelled' : isPast ? 'past' : 'active';
+    const label   = { cancelled: '已取消', past: '已結束', active: '有效' }[status];
     return `<div class="booking-item">
       <div>
-        <div class="booking-item-title">${b.title || '（無標題）'}</div>
+        <div class="booking-item-title">${b.date} ${b.startTime}–${b.endTime}</div>
         <div class="booking-item-meta">
-          <span>📅 ${b.date}</span>
-          <span>🕐 ${b.startTime} – ${b.endTime}</span>
           <span>👤 ${b.name}${b.dept ? '・' + b.dept : ''}</span>
+          <span>🆔 ${b.empId}</span>
+          ${b.note ? `<span>📝 ${b.note}</span>` : ''}
         </div>
       </div>
       <div class="booking-item-actions">
@@ -450,14 +410,13 @@ function renderMyList(bks) {
   $$('[data-id]', el).forEach(btn => {
     btn.addEventListener('click', () => {
       showModal({
-        icon: '⚠️', title: '確定取消預約？',
-        body: '取消後無法復原。',
+        icon: '⚠️', title: '確定取消預約？', body: '取消後無法復原。',
         cancelLabel: '返回', onCancel: () => {},
         closeLabel: '確定取消',
         onClose: async () => {
           showLoading();
           try {
-            const res = await apiPost('cancelBooking', { id: btn.dataset.id, empId: btn.dataset.empid });
+            const res = await apiGet('cancelBooking', { id: btn.dataset.id, empId: btn.dataset.empid });
             hideLoading();
             if (res.ok) doQuery();
             else showModal({ icon: '❌', title: '取消失敗', body: res.error });
@@ -470,39 +429,20 @@ function renderMyList(bks) {
 
 /* ── 初始化 ─────────────────────────────────────────────────── */
 function init() {
-  // 導覽
   $$('.nav-btn').forEach(b => b.addEventListener('click', () => navigate(b.dataset.view)));
-
-  // 週導覽
   $('#w-prev').addEventListener('click', () => {
-    const m = new Date(state.weekMonday);
-    m.setDate(m.getDate() - 7);
-    loadWeek(m);
+    const m = new Date(state.weekMonday); m.setDate(m.getDate() - 7); loadWeek(m);
   });
   $('#w-next').addEventListener('click', () => {
-    const m = new Date(state.weekMonday);
-    m.setDate(m.getDate() + 7);
-    loadWeek(m);
+    const m = new Date(state.weekMonday); m.setDate(m.getDate() + 7); loadWeek(m);
   });
   $('#w-today').addEventListener('click', () => loadWeek(getMondayOf(new Date())));
-
-  // 預約 modal
   $('#bm-close-x').addEventListener('click', closeBmModal);
   $('#bm-cancel-btn').addEventListener('click', closeBmModal);
-  $('#bm-overlay').addEventListener('click', e => {
-    if (e.target === $('#bm-overlay')) closeBmModal();
-  });
+  $('#bm-overlay').addEventListener('click', e => { if (e.target === $('#bm-overlay')) closeBmModal(); });
+  $('#modal-overlay').addEventListener('click', e => { if (e.target === $('#modal-overlay')) hideGenericModal(); });
   initBmForm();
-
-  // 通用 modal
-  $('#modal-overlay').addEventListener('click', e => {
-    if (e.target === $('#modal-overlay')) hideGenericModal();
-  });
-
-  // 我的預約
   initMyBookings();
-
-  // 載入本週
   loadWeek(getMondayOf(new Date()));
 }
 

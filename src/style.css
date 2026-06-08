@@ -271,6 +271,7 @@ body {
   width: 100%;
 }
 .time-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.time-select option:disabled { color: var(--gray-400); background: var(--gray-100); }
 .dur-warn {
   margin-bottom: 10px; font-size: .82rem;
   color: var(--danger); background: var(--danger-light);

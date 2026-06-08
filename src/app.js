@@ -331,10 +331,18 @@ function buildTimeSelects() {
   const startSel = $('#bm-start-sel');
   const endSel   = $('#bm-end-sel');
 
-  // ── 開始時間選單 ──
-  startSel.innerHTML = SLOTS.map(s =>
-    `<option value="${s}" ${s === state.bm.startTime ? 'selected' : ''}>${s}</option>`
-  ).join('');
+  // ── 開始時間選單（標記已佔用時段）──
+  const bks = state.weekBookings[state.bm.date] || [];
+  startSel.innerHTML = SLOTS.map(s => {
+    const sMin = timeToMin(s);
+    const busy = bks.some(b => timeToMin(b.startTime) <= sMin && sMin < timeToMin(b.endTime));
+    return `<option value="${s}" ${s === state.bm.startTime ? 'selected' : ''} ${busy ? 'disabled' : ''}>${s}${busy ? '（已被佔用）' : ''}</option>`;
+  }).join('');
+  // 若預設開始時間剛好落在佔用區間，改選下一個可用時段
+  if (startSel.options[startSel.selectedIndex]?.disabled) {
+    const first = [...startSel.options].find(o => !o.disabled);
+    if (first) { startSel.value = first.value; state.bm.startTime = first.value; }
+  }
 
   // ── 結束時間選單（依開始時間動態更新）──
   function refreshEndSel() {
@@ -579,9 +587,12 @@ function buildEditTimeSelects(otherBks) {
     return limit;
   }
 
-  startSel.innerHTML = SLOTS.map(s =>
-    `<option value="${s}" ${s === emState.startTime ? 'selected' : ''}>${s}</option>`
-  ).join('');
+  // ── 開始時間選單（標記已佔用時段）──
+  startSel.innerHTML = SLOTS.map(s => {
+    const sMin = timeToMin(s);
+    const busy = otherBks.some(b => timeToMin(b.startTime) <= sMin && sMin < timeToMin(b.endTime));
+    return `<option value="${s}" ${s === emState.startTime ? 'selected' : ''} ${busy ? 'disabled' : ''}>${s}${busy ? '（已被佔用）' : ''}</option>`;
+  }).join('');
 
   function refreshEndSel() {
     const startMin = timeToMin(startSel.value);

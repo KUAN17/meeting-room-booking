@@ -58,9 +58,15 @@ async function apiGet(action, params = {}) {
   const url = new URL(cfg.GAS_URL);
   url.searchParams.set('action', action);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error('伺服器錯誤');
-  return res.json();
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`);
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error('GAS 回應內容：', text);
+    throw new Error('GAS 回應格式錯誤，請確認已重新部署最新版 Code.gs');
+  }
 }
 
 /* ── 模擬後端 ────────────────────────────────────────────────── */

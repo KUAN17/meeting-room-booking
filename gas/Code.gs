@@ -65,7 +65,8 @@ function handleRequest(e, isPost) {
     let result;
     switch (action) {
       case 'getRooms':      result = getRooms();            break;
-      case 'getBookings':   result = getBookings(params);   break;
+      case 'getBookings':     result = getBookings(params);     break;
+      case 'getWeekBookings': result = getWeekBookings(params); break;
       case 'getMyBookings': result = getMyBookings(params); break;
       case 'createBooking': result = createBooking(params); break;
       case 'cancelBooking': result = cancelBooking(params); break;
@@ -141,6 +142,19 @@ function getRooms() {
       features: String(r[4]).split(',').map(s => s.trim()).filter(Boolean),
     })),
   };
+}
+
+function getWeekBookings({ startDate, endDate, roomId }) {
+  const rows = readBookings();
+  const bookings = rows
+    .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
+    .filter(r => {
+      const d = toDateISO(r[COL.DATE]);
+      return d >= startDate && d <= endDate;
+    })
+    .filter(r => !roomId || String(r[COL.ROOM_ID]) === roomId)
+    .map(rowToObj);
+  return { ok: true, bookings };
 }
 
 function getBookings({ date, roomId }) {

@@ -76,6 +76,13 @@ function saveMock() { localStorage.setItem('mock_bk', JSON.stringify(mockDB.book
 
 async function mockApi(action, p) {
   await new Promise(r => setTimeout(r, 150));
+  if (action === 'getWeekBookings') {
+    return { ok: true, bookings: mockDB.bookings.filter(b =>
+      b.status !== 'cancelled' &&
+      b.date >= p.startDate && b.date <= p.endDate &&
+      (!p.roomId || b.roomId === p.roomId)
+    )};
+  }
   if (action === 'getBookings') {
     return { ok: true, bookings: mockDB.bookings.filter(b =>
       b.status !== 'cancelled' &&
@@ -154,11 +161,18 @@ async function loadWeek(monday) {
   const dates = Array.from({ length: 5 }, (_, i) => {
     const d = new Date(monday); d.setDate(d.getDate() + i); return d;
   });
-  const results = await Promise.all(
-    dates.map(d => apiGet('getBookings', { date: fmtDateISO(d), roomId: cfg.ROOM.id })
-      .then(r => r.bookings || []).catch(() => []))
-  );
-  dates.forEach((d, i) => { state.weekBookings[fmtDateISO(d)] = results[i]; });
+  // 單次批次請求取得整週資料（5 個請求 → 1 個）
+  const startDate = fmtDateISO(dates[0]);
+  const endDate   = fmtDateISO(dates[4]);
+  let allBookings = [];
+  try {
+    const res = await apiGet('getWeekBookings', { startDate, endDate, roomId: cfg.ROOM.id });
+    allBookings = res.bookings || [];
+  } catch { allBookings = []; }
+  dates.forEach(d => {
+    const iso = fmtDateISO(d);
+    state.weekBookings[iso] = allBookings.filter(b => b.date === iso);
+  });
   hideLoading();
   renderWeekGrid(dates);
 }

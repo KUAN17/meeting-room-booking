@@ -467,7 +467,7 @@ function renderMyList(bks) {
           try {
             const res = await apiGet('cancelBooking', { id: bk.id, empId: bk.empId });
             hideLoading();
-            if (res.ok) doQuery();
+            if (res.ok) { doQuery(); loadWeek(state.weekMonday); }
             else showModal({ icon: '❌', title: '取消失敗', body: res.error });
           } catch (err) { hideLoading(); showModal({ icon: '❌', title: '錯誤', body: err.message }); }
         },

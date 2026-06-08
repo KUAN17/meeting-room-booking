@@ -1,66 +1,68 @@
-/* ── 會議室預約系統 前端主程式 ─────────────────────────────── */
 'use strict';
-
 const cfg = window.APP_CONFIG;
 
-/* ── 狀態 ──────────────────────────────────────────────────── */
-const state = {
-  rooms:         [],
-  bookings:      [],
-  selectedRoom:  null,
-  selectedDate:  null,
-  startSlot:     null,   // '09:00'
-  endSlot:       null,   // '11:00'（exclusive，即 11:00 開始的那格）
-  calYear:       0,
-  calMonth:      0,
-  scheduleDate:  new Date(),
-};
+/* ── 工具 ───────────────────────────────────────────────────── */
+const $ = (s, c = document) => c.querySelector(s);
+const $$ = (s, c = document) => [...c.querySelectorAll(s)];
 
-/* ── 工具函式 ───────────────────────────────────────────────── */
-const $ = (sel, ctx = document) => ctx.querySelector(sel);
-const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+function pad(n) { return String(n).padStart(2, '0'); }
+function timeToMin(t) { const [h, m] = t.split(':'); return +h * 60 + +m; }
+function minToTime(m) { return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; }
 
-function fmtDate(d) {
-  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+function todayMidnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function fmtDateISO(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function fmtDateDisplay(d) {
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
 }
-function fmtDateISO(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+// 產生 30 分鐘為單位的時段列表
+function generateSlots() {
+  const slots = [];
+  for (let m = cfg.START_HOUR * 60; m < cfg.END_HOUR * 60; m += 30) {
+    slots.push(minToTime(m));
+  }
+  return slots;
 }
-function today() { const d = new Date(); d.setHours(0,0,0,0); return d; }
-function isoToDate(s) { const [y,m,d] = s.split('-'); return new Date(+y,+m-1,+d); }
-function timeToMin(t) { const [h,m] = t.split(':'); return +h*60 + +m; }
-function addHour(t) {
-  const [h,m] = t.split(':');
-  return `${String(+h+1).padStart(2,'0')}:${m}`;
+const SLOTS = generateSlots(); // ['08:00','08:30',...,'17:30']
+
+// 取得當週的週一日期（Date 物件）
+function getMondayOf(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=日
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function showLoading() { $('#loading-overlay').classList.remove('hidden'); }
 function hideLoading() { $('#loading-overlay').classList.add('hidden'); }
 
-function showModal({ icon='', title='', body='', cancelLabel='', onCancel=null, closeLabel='確認', onClose=null }) {
+/* ── 通用 Modal ─────────────────────────────────────────────── */
+function showModal({ icon = '', title = '', body = '', closeLabel = '確認', cancelLabel = '', onClose = null, onCancel = null }) {
   $('#modal-icon').textContent = icon;
   $('#modal-title').textContent = title;
   $('#modal-body').textContent = body;
   $('#modal-close').textContent = closeLabel;
-  const cancelBtn = $('#modal-cancel');
-  if (cancelLabel && onCancel) {
-    cancelBtn.textContent = cancelLabel;
-    cancelBtn.classList.remove('hidden');
-    cancelBtn.onclick = () => { hideModal(); onCancel(); };
+  const cb = $('#modal-cancel');
+  if (cancelLabel) {
+    cb.textContent = cancelLabel;
+    cb.classList.remove('hidden');
+    cb.onclick = () => { hideGenericModal(); if (onCancel) onCancel(); };
   } else {
-    cancelBtn.classList.add('hidden');
+    cb.classList.add('hidden');
   }
-  $('#modal-close').onclick = () => { hideModal(); if (onClose) onClose(); };
+  $('#modal-close').onclick = () => { hideGenericModal(); if (onClose) onClose(); };
   $('#modal-overlay').classList.remove('hidden');
 }
-function hideModal() { $('#modal-overlay').classList.add('hidden'); }
+function hideGenericModal() { $('#modal-overlay').classList.add('hidden'); }
 
-/* ── API 層 ─────────────────────────────────────────────────── */
-async function apiCall(action, params = {}) {
+/* ── API ────────────────────────────────────────────────────── */
+async function apiGet(action, params = {}) {
   if (!cfg.GAS_URL) return mockApi(action, params);
   const url = new URL(cfg.GAS_URL);
   url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error('伺服器錯誤');
   return res.json();
@@ -77,343 +79,361 @@ async function apiPost(action, body = {}) {
   return res.json();
 }
 
-/* ── 模擬後端（GAS_URL 未設定時） ──────────────────────────── */
-const mockDB = { bookings: JSON.parse(localStorage.getItem('mockBookings') || '[]') };
-function saveMock() { localStorage.setItem('mockBookings', JSON.stringify(mockDB.bookings)); }
+/* ── 模擬後端 ────────────────────────────────────────────────── */
+const mockDB = { bookings: JSON.parse(localStorage.getItem('mock_bk') || '[]') };
+function saveMock() { localStorage.setItem('mock_bk', JSON.stringify(mockDB.bookings)); }
 
-async function mockApi(action, params) {
-  await new Promise(r => setTimeout(r, 200));
-  switch (action) {
-    case 'getRooms':
-      return { ok: true, rooms: cfg.DEFAULT_ROOMS };
-
-    case 'getBookings': {
-      const list = mockDB.bookings.filter(b =>
-        b.status !== 'cancelled' &&
-        (!params.date   || b.date   === params.date) &&
-        (!params.roomId || b.roomId === params.roomId)
-      );
-      return { ok: true, bookings: list };
-    }
-    case 'getMyBookings': {
-      const list = mockDB.bookings.filter(b =>
-        (params.empId  && b.empId  === params.empId) ||
-        (params.email  && b.email  === params.email)
-      );
-      return { ok: true, bookings: list };
-    }
-    case 'createBooking': {
-      // 衝突檢查
-      const existing = mockDB.bookings.filter(b =>
-        b.status !== 'cancelled' && b.date === params.date && b.roomId === params.roomId
-      );
-      const conflict = existing.some(b =>
-        params.startTime < b.endTime && params.endTime > b.startTime
-      );
-      if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
-      const id = 'BK' + Date.now();
-      mockDB.bookings.push({ id, status: 'active', createdAt: new Date().toISOString(), ...params });
-      saveMock();
-      return { ok: true, bookingId: id };
-    }
-    case 'cancelBooking': {
-      const idx = mockDB.bookings.findIndex(b =>
-        b.id === params.id &&
-        ((params.empId && b.empId === params.empId) ||
-         (params.email && b.email === params.email))
-      );
-      if (idx === -1) return { ok: false, error: '找不到預約，或員工編號 / Email 不符' };
-      mockDB.bookings[idx].status = 'cancelled';
-      saveMock();
-      return { ok: true };
-    }
-    default: return { ok: false, error: 'unknown action' };
+async function mockApi(action, p) {
+  await new Promise(r => setTimeout(r, 150));
+  if (action === 'getBookings') {
+    const list = mockDB.bookings.filter(b =>
+      b.status !== 'cancelled' &&
+      (!p.date   || b.date   === p.date) &&
+      (!p.roomId || b.roomId === p.roomId)
+    );
+    return { ok: true, bookings: list };
   }
+  if (action === 'getMyBookings') {
+    return { ok: true, bookings: mockDB.bookings.filter(b => b.empId === p.empId) };
+  }
+  if (action === 'createBooking') {
+    const conflict = mockDB.bookings.some(b =>
+      b.status !== 'cancelled' && b.date === p.date && b.roomId === p.roomId &&
+      p.startTime < b.endTime && p.endTime > b.startTime
+    );
+    if (conflict) return { ok: false, error: '所選時段與現有預約衝突' };
+    const id = 'BK' + Date.now();
+    mockDB.bookings.push({ id, status: 'active', ...p });
+    saveMock();
+    return { ok: true, bookingId: id };
+  }
+  if (action === 'cancelBooking') {
+    const idx = mockDB.bookings.findIndex(b => b.id === p.id && b.empId === p.empId);
+    if (idx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
+    mockDB.bookings[idx].status = 'cancelled';
+    saveMock();
+    return { ok: true };
+  }
+  return { ok: false, error: 'unknown' };
 }
+
+/* ── 狀態 ───────────────────────────────────────────────────── */
+const state = {
+  weekMonday: getMondayOf(new Date()),  // 當前顯示週的週一
+  weekBookings: {},  // { 'YYYY-MM-DD': [...bookings] }
+  bm: {             // booking modal 狀態
+    date: null,
+    startTime: null,
+    duration: cfg.DEFAULT_DURATION,
+  },
+};
 
 /* ── 導覽 ───────────────────────────────────────────────────── */
 function navigate(view) {
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
-  if (view === 'schedule') renderSchedule();
 }
 
-/* ── 會議室列表 ─────────────────────────────────────────────── */
-async function loadRooms() {
-  const res = await apiCall('getRooms');
-  state.rooms = res.rooms || cfg.DEFAULT_ROOMS;
-  renderRoomList();
-}
-
-function renderRoomList() {
-  const el = $('#room-list');
-  el.innerHTML = state.rooms.map(r => `
-    <div class="room-card${state.selectedRoom?.id === r.id ? ' selected' : ''}" data-id="${r.id}">
-      <div class="room-card-name">${r.name}</div>
-      <div class="room-card-meta">
-        <span>🏢 ${r.floor}</span><span>👥 ${r.capacity} 人</span>
-      </div>
-      <div class="room-card-tags">
-        ${(r.features||[]).map(f=>`<span class="room-tag">${f}</span>`).join('')}
-      </div>
-    </div>`).join('');
-  $$('.room-card', el).forEach(card => {
-    card.addEventListener('click', () => {
-      state.selectedRoom  = state.rooms.find(r => r.id === card.dataset.id);
-      state.startSlot = null; state.endSlot = null;
-      renderRoomList(); refreshTimeSlots(); updateSummary();
-    });
-  });
-}
-
-/* ── 月曆 ───────────────────────────────────────────────────── */
-function initCalendar() {
-  const t = today();
-  state.calYear = t.getFullYear(); state.calMonth = t.getMonth();
-  renderCalendar();
-  $('#cal-prev').addEventListener('click', () => {
-    if (state.calMonth === 0) { state.calYear--; state.calMonth = 11; } else state.calMonth--;
-    renderCalendar();
-  });
-  $('#cal-next').addEventListener('click', () => {
-    if (state.calMonth === 11) { state.calYear++; state.calMonth = 0; } else state.calMonth++;
-    renderCalendar();
-  });
-}
-
-function renderCalendar() {
-  const { calYear: y, calMonth: m } = state;
-  $('#cal-month-label').textContent = `${y} 年 ${m+1} 月`;
-  const first = new Date(y, m, 1).getDay();
-  const days  = new Date(y, m+1, 0).getDate();
-  const t     = today();
-  const maxD  = new Date(t); maxD.setDate(t.getDate() + cfg.BOOK_AHEAD_DAYS - 1);
-  const cells = [];
-  for (let i = 0; i < first; i++) cells.push('<div class="cal-day empty"></div>');
-  for (let d = 1; d <= days; d++) {
-    const date = new Date(y, m, d);
-    const iso  = fmtDateISO(date);
-    const cls  = ['cal-day',
-      date.toDateString() === t.toDateString() ? 'today' : '',
-      (date < t || date > maxD) ? 'disabled' : '',
-      state.selectedDate === iso ? 'selected' : '',
-    ].filter(Boolean).join(' ');
-    cells.push(`<div class="${cls}" data-date="${iso}">${d}</div>`);
-  }
-  $('#cal-days').innerHTML = cells.join('');
-  $$('.cal-day:not(.empty):not(.disabled)').forEach(el => {
-    el.addEventListener('click', async () => {
-      state.selectedDate = el.dataset.date;
-      state.startSlot = null; state.endSlot = null;
-      renderCalendar();
-      await refreshTimeSlots();
-      updateSummary();
-    });
-  });
-}
-
-/* ── 時段（連續拖選：點起點再點終點） ──────────────────────── */
-async function refreshTimeSlots() {
-  const el = $('#time-slots');
-  if (!state.selectedRoom || !state.selectedDate) {
-    el.innerHTML = '<p class="hint">請先選擇會議室與日期</p>'; return;
-  }
-  el.innerHTML = '<p class="hint">載入中…</p>';
+/* ── 週曆：載入 ──────────────────────────────────────────────── */
+async function loadWeek(monday) {
+  state.weekMonday = monday;
+  updateWeekLabel();
+  $('#week-grid').innerHTML = '<div class="loading-box">載入中…</div>';
   showLoading();
-  try {
-    const res = await apiCall('getBookings', { date: state.selectedDate, roomId: state.selectedRoom.id });
-    state.bookings = res.bookings || [];
-  } finally { hideLoading(); }
-  renderTimeSlots();
-}
 
-function isSlotBusy(slot) {
-  const slotMin = timeToMin(slot);
-  return state.bookings.some(b =>
-    slotMin >= timeToMin(b.startTime) && slotMin < timeToMin(b.endTime)
+  // 週一到週五
+  const dates = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  // 並行取得每日預約
+  const results = await Promise.all(
+    dates.map(d => apiGet('getBookings', { date: fmtDateISO(d), roomId: cfg.ROOM.id })
+      .then(r => r.bookings || [])
+      .catch(() => [])
+    )
   );
+  dates.forEach((d, i) => { state.weekBookings[fmtDateISO(d)] = results[i]; });
+  hideLoading();
+  renderWeekGrid(dates);
 }
 
-function renderTimeSlots() {
-  const nowH   = new Date().getHours();
-  const isToday = state.selectedDate === fmtDateISO(today());
-  const selStart = state.startSlot ? timeToMin(state.startSlot) : null;
-  const selEnd   = state.endSlot   ? timeToMin(state.endSlot)   : null;
+function updateWeekLabel() {
+  const fri = new Date(state.weekMonday);
+  fri.setDate(fri.getDate() + 4);
+  const days = ['日','一','二','三','四','五','六'];
+  const m = state.weekMonday;
+  $('#w-label').textContent =
+    `${m.getFullYear()}/${pad(m.getMonth()+1)}/${pad(m.getDate())}（週一）` +
+    ` ～ ${pad(fri.getMonth()+1)}/${pad(fri.getDate())}（週五）`;
+}
 
-  const html = cfg.TIME_SLOTS.map(slot => {
-    const h      = parseInt(slot);
-    const slotM  = timeToMin(slot);
-    const isPast = isToday && h < nowH;
-    const busy   = isSlotBusy(slot);
-    const bk     = state.bookings.find(b =>
-      slotM >= timeToMin(b.startTime) && slotM < timeToMin(b.endTime)
-    );
+/* ── 週曆：渲染 ──────────────────────────────────────────────── */
+function renderWeekGrid(dates) {
+  const now      = new Date();
+  const todayISO = fmtDateISO(todayMidnight());
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
+  const DAY_NAMES = ['週一','週二','週三','週四','週五'];
 
-    let cls = 'time-slot';
-    if (busy || isPast) {
-      cls += ' booked';
-    } else if (selStart !== null && selEnd !== null &&
-               slotM >= selStart && slotM < selEnd) {
-      cls += ' selected';
-    } else if (selStart !== null && selEnd === null && slotM === selStart) {
-      cls += ' selected';
-    }
+  // 建構每日的「slot → booking」映射，並記錄哪些 slot 已被 rowspan 消耗
+  // consumed[dayIdx] = Set of slot strings that are covered by a previous rowspan
+  const consumedByDay = dates.map(() => new Set());
+  // bookingAtSlot[dayIdx][slotIdx] = booking obj or null (only for start slot)
+  const bookingStart = dates.map(() => ({}));  // { slotStr: bookingObj }
 
-    const sub = busy
-      ? `<span class="slot-booked-tag">${bk ? (bk.title?.slice(0,6) || '已預約') : '已預約'}</span>`
-      : '';
-    return `<div class="${cls}" data-slot="${slot}"><span class="slot-label">${slot}</span>${sub}</div>`;
+  dates.forEach((date, di) => {
+    const iso = fmtDateISO(date);
+    const bks = state.weekBookings[iso] || [];
+    SLOTS.forEach(slot => {
+      if (consumedByDay[di].has(slot)) return;
+      const slotM = timeToMin(slot);
+      const bk = bks.find(b =>
+        timeToMin(b.startTime) <= slotM && timeToMin(b.endTime) > slotM
+      );
+      if (!bk) return;
+      // 此 booking 在本 slot 開始渲染（可能 startTime < slot 若時間不對齊）
+      bookingStart[di][slot] = bk;
+      // 消耗後續被此 booking 覆蓋的 slot
+      const endM = timeToMin(bk.endTime);
+      SLOTS.forEach(s => {
+        const sm = timeToMin(s);
+        if (sm > slotM && sm < endM) consumedByDay[di].add(s);
+      });
+    });
+  });
+
+  // 建立表格
+  const headerCells = dates.map((d, i) => {
+    const iso = fmtDateISO(d);
+    const isToday = iso === todayISO;
+    return `<th class="${isToday ? 'today-col' : ''}">
+      <span class="day-name">${DAY_NAMES[i]}</span>
+      <span class="day-date">${pad(d.getMonth()+1)}/${pad(d.getDate())}</span>
+    </th>`;
   }).join('');
 
-  $('#time-slots').innerHTML = html;
-  $$('.time-slot:not(.booked)').forEach(el => {
-    el.addEventListener('click', () => pickSlot(el.dataset.slot));
+  const bodyRows = SLOTS.map((slot, si) => {
+    const slotM    = timeToMin(slot);
+    const isHour   = slotM % 60 === 0;
+    const timeCell = `<td class="time-cell${isHour ? ' hour-line' : ''}">${isHour ? slot : ''}</td>`;
+
+    const dayCells = dates.map((date, di) => {
+      const iso = fmtDateISO(date);
+
+      // 已被 rowspan 消耗
+      if (consumedByDay[di].has(slot)) return '';
+
+      const bk = bookingStart[di][slot];
+      if (bk) {
+        // 計算 rowspan：從本 slot 到 booking 結束
+        const endM   = timeToMin(bk.endTime);
+        const rowspan = Math.round((endM - slotM) / 30);
+        const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
+        return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}" rowspan="${rowspan}">
+          <div class="booked-name">${bk.name}</div>
+          <div class="booked-dept">${bk.dept || ''}</div>
+          <div class="booked-time">${bk.startTime}–${bk.endTime}</div>
+        </td>`;
+      }
+
+      // 空格
+      const isToday = iso === todayISO;
+      const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
+      return `<td class="slot-empty${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}${isToday ? ' today-col' : ''}"
+                  data-date="${iso}" data-time="${slot}"></td>`;
+    }).join('');
+
+    return `<tr>${timeCell}${dayCells}</tr>`;
+  }).join('');
+
+  $('#week-grid').innerHTML = `
+    <table class="week-table">
+      <colgroup><col class="col-time">${dates.map(() => '<col>').join('')}</colgroup>
+      <thead><tr><th></th>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+
+  // 點選空格 → 開啟預約 modal
+  $$('.slot-empty:not(.past)', $('#week-grid')).forEach(td => {
+    td.addEventListener('click', () => openBookingModal(td.dataset.date, td.dataset.time));
   });
 }
 
-function pickSlot(slot) {
-  if (!state.startSlot || (state.startSlot && state.endSlot)) {
-    // 重新選起點
-    state.startSlot = slot; state.endSlot = null;
-  } else {
-    // 選終點
-    const startM = timeToMin(state.startSlot);
-    const endM   = timeToMin(slot);
-    if (endM <= startM) { state.startSlot = slot; state.endSlot = null; }
-    else {
-      // 確保中間沒有已預約的時段
-      const slots = cfg.TIME_SLOTS.filter(s => {
-        const m = timeToMin(s);
-        return m >= startM && m < endM;
-      });
-      const maxH = cfg.MAX_HOURS;
-      if (slots.length > maxH) {
-        alert(`最多連續預約 ${maxH} 小時`); return;
-      }
-      const hasConflict = slots.some(s => isSlotBusy(s));
-      if (hasConflict) {
-        alert('選取範圍內包含已預約的時段，請重新選擇'); return;
-      }
-      state.endSlot = slot;   // endSlot exclusive（開始時間）
+/* ── 預約 Modal ─────────────────────────────────────────────── */
+function openBookingModal(date, startTime) {
+  state.bm.date      = date;
+  state.bm.startTime = startTime;
+  state.bm.duration  = cfg.DEFAULT_DURATION;
+
+  const d = new Date(date + 'T00:00:00');
+  const dayNames = ['日','一','二','三','四','五','六'];
+  $('#bm-date-label').textContent = `${fmtDateDisplay(d)}（週${dayNames[d.getDay()]}）`;
+  $('#bm-start-label').textContent = `開始 ${startTime}`;
+
+  renderDurBtns();
+  $('#bm-form').reset();
+  $('#bm-msg').textContent = '';
+  $('#bm-overlay').classList.remove('hidden');
+}
+
+function closeBmModal() { $('#bm-overlay').classList.add('hidden'); }
+
+function renderDurBtns() {
+  const startM   = timeToMin(state.bm.startTime);
+  const maxEndM  = cfg.END_HOUR * 60;
+  const iso      = state.bm.date;
+  const bks      = (state.weekBookings[iso] || []);
+  // 找最近一個衝突的起始時間
+  let limitM = maxEndM;
+  bks.forEach(b => {
+    const bStartM = timeToMin(b.startTime);
+    if (bStartM > startM) limitM = Math.min(limitM, bStartM);
+  });
+
+  const warn = $('#dur-warn');
+  let warnShown = false;
+
+  $('#dur-btns').innerHTML = cfg.DURATIONS.map(dur => {
+    const endM   = startM + dur * 60;
+    const endStr = minToTime(endM);
+    const tooLong  = endM > maxEndM;
+    const conflict = endM > limitM;
+    const disabled = tooLong || conflict;
+    const label    = dur < 1 ? '30分' : `${dur}小時`;
+    return `<button class="dur-btn${dur === state.bm.duration && !disabled ? ' active' : ''}"
+                    data-dur="${dur}" ${disabled ? 'disabled' : ''}>
+              ${label}
+            </button>`;
+  }).join('');
+
+  $$('.dur-btn:not([disabled])', $('#dur-btns')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.bm.duration = parseFloat(btn.dataset.dur);
+      $$('.dur-btn').forEach(b => b.classList.toggle('active', b === btn));
+      updateBmEndTime();
+    });
+    if (parseFloat(btn.dataset.dur) === state.bm.duration) btn.classList.add('active');
+  });
+
+  // 若預設 duration 被 disabled，自動選最大可用
+  const activeDur = cfg.DURATIONS.find(d => {
+    const endM = startM + d * 60;
+    return endM <= limitM && endM <= maxEndM;
+  });
+  if (activeDur) {
+    if (startM + state.bm.duration * 60 > limitM ||
+        startM + state.bm.duration * 60 > maxEndM) {
+      state.bm.duration = activeDur;
+      const btn = $(`[data-dur="${activeDur}"]`, $('#dur-btns'));
+      if (btn) btn.classList.add('active');
     }
   }
-  renderTimeSlots(); updateSummary(); updateSubmitBtn();
-}
 
-function updateSubmitBtn() {
-  const ok = state.selectedRoom && state.selectedDate && state.startSlot && state.endSlot;
-  $('#submit-btn').disabled = !ok;
-}
-
-/* ── 摘要 ───────────────────────────────────────────────────── */
-function updateSummary() {
-  const el = $('#booking-summary');
-  if (!state.selectedRoom && !state.selectedDate) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
-  $('#sum-room').textContent = state.selectedRoom?.name || '—';
-  $('#sum-date').textContent = state.selectedDate ? fmtDate(isoToDate(state.selectedDate)) : '—';
-  if (state.startSlot && state.endSlot) {
-    const startM = timeToMin(state.startSlot);
-    const endM   = timeToMin(state.endSlot);
-    const hrs    = (endM - startM) / 60;
-    $('#sum-time').textContent = `${state.startSlot} – ${state.endSlot}（${hrs} 小時）`;
-  } else if (state.startSlot) {
-    $('#sum-time').textContent = `${state.startSlot}（請再選結束時段）`;
+  if (limitM < maxEndM) {
+    warn.textContent = `此時段後 ${minToTime(limitM)} 已有預約，可選時長受限`;
+    warn.classList.remove('hidden');
   } else {
-    $('#sum-time').textContent = '尚未選擇';
+    warn.classList.add('hidden');
   }
-  updateSubmitBtn();
+
+  updateBmEndTime();
 }
 
-/* ── 表單 ───────────────────────────────────────────────────── */
-function initForm() {
-  $('#booking-form').addEventListener('submit', async e => {
+function updateBmEndTime() {
+  const endMin = timeToMin(state.bm.startTime) + state.bm.duration * 60;
+  $('#bm-end-label').textContent = minToTime(endMin);
+  $('#bm-time-label').textContent = `${state.bm.startTime} – ${minToTime(endMin)}`;
+}
+
+/* ── 送出預約 ───────────────────────────────────────────────── */
+function initBmForm() {
+  $('#bm-form').addEventListener('submit', async e => {
     e.preventDefault();
-    if (!state.selectedRoom || !state.selectedDate || !state.startSlot || !state.endSlot) {
-      setFormMsg('請完整選擇會議室、日期與時段（需選起訖兩個時間點）', 'error'); return;
+    const name      = $('#f-name').value.trim();
+    const empId     = $('#f-empid').value.trim();
+    const dept      = $('#f-dept').value.trim();
+    const title     = $('#f-title').value.trim();
+    const attendees = $('#f-attendees').value.trim();
+    const note      = $('#f-note').value.trim();
+
+    if (!name || !empId || !title || !attendees) {
+      setMsg('請填寫所有必填欄位', 'error'); return;
     }
-    const body = {
-      roomId:    state.selectedRoom.id,
-      roomName:  state.selectedRoom.name,
-      date:      state.selectedDate,
-      startTime: state.startSlot,
-      endTime:   state.endSlot,
-      name:      $('#f-name').value.trim(),
-      empId:     $('#f-empid').value.trim(),
-      email:     $('#f-email').value.trim(),
-      dept:      $('#f-dept').value.trim(),
-      title:     $('#f-title').value.trim(),
-      attendees: $('#f-attendees').value,
-      note:      $('#f-note').value.trim(),
-    };
+
+    const startTime = state.bm.startTime;
+    const endTime   = minToTime(timeToMin(startTime) + state.bm.duration * 60);
+
     showLoading();
     try {
-      const res = await apiPost('createBooking', body);
+      const res = await apiPost('createBooking', {
+        roomId:    cfg.ROOM.id,
+        roomName:  cfg.ROOM.name,
+        date:      state.bm.date,
+        startTime, endTime,
+        name, empId, dept, title, attendees, note,
+      });
       hideLoading();
       if (res.ok) {
+        closeBmModal();
         showModal({
           icon: '✅', title: '預約成功！',
-          body: `已成功預約 ${body.roomName}，${fmtDate(isoToDate(body.date))} ${body.startTime}–${body.endTime}。預約編號：${res.bookingId}`,
-          closeLabel: '確認',
-          onClose: () => {
-            $('#booking-form').reset();
-            state.startSlot = null; state.endSlot = null;
-            renderTimeSlots(); updateSummary(); updateSubmitBtn();
-          },
+          body: `${cfg.ROOM.name} ${fmtDateDisplay(new Date(state.bm.date + 'T00:00:00'))} ${startTime}–${endTime} 已完成預約`,
+          onClose: () => loadWeek(state.weekMonday),
         });
       } else {
-        showModal({ icon: '❌', title: '預約失敗', body: res.error || '請稍後再試' });
+        setMsg(res.error || '預約失敗，請稍後再試', 'error');
       }
     } catch (err) {
-      hideLoading(); showModal({ icon: '❌', title: '連線錯誤', body: err.message });
+      hideLoading(); setMsg(err.message, 'error');
     }
   });
 }
-function setFormMsg(msg, type = '') {
-  const el = $('#form-msg');
-  el.textContent = msg;
+function setMsg(txt, type = '') {
+  const el = $('#bm-msg');
+  el.textContent = txt;
   el.className = 'form-msg' + (type ? ' ' + type : '');
 }
 
 /* ── 我的預約 ───────────────────────────────────────────────── */
 function initMyBookings() {
-  $('#query-btn').addEventListener('click', queryMyBookings);
-  $('#query-empid').addEventListener('keydown', e => { if (e.key === 'Enter') queryMyBookings(); });
+  $('#query-btn').addEventListener('click', doQuery);
+  $('#query-empid').addEventListener('keydown', e => { if (e.key === 'Enter') doQuery(); });
 }
-async function queryMyBookings() {
+async function doQuery() {
   const empId = $('#query-empid').value.trim();
   if (!empId) return;
   showLoading();
   try {
-    const res = await apiCall('getMyBookings', { empId });
-    hideLoading(); renderMyBookings(res.bookings || []);
+    const res = await apiGet('getMyBookings', { empId });
+    hideLoading();
+    renderMyList(res.bookings || []);
   } catch (err) {
     hideLoading();
-    $('#my-bookings-list').innerHTML = `<p class="hint">查詢失敗：${err.message}</p>`;
+    $('#my-list').innerHTML = `<p style="color:var(--gray-400);font-size:.9rem">查詢失敗：${err.message}</p>`;
   }
 }
 
-function renderMyBookings(bookings) {
-  const el = $('#my-bookings-list');
-  if (bookings.length === 0) {
+function renderMyList(bks) {
+  const el = $('#my-list');
+  if (bks.length === 0) {
     el.innerHTML = `<div class="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
       </svg><p>查無預約紀錄</p></div>`;
     return;
   }
-  const t = today();
-  el.innerHTML = bookings.map(b => {
-    const bDate  = isoToDate(b.date);
-    const isPast = bDate < t;
+  const todayISO = fmtDateISO(todayMidnight());
+  el.innerHTML = bks.map(b => {
+    const isPast = b.date < todayISO;
     const status = b.status === 'cancelled' ? 'cancelled' : isPast ? 'past' : 'active';
     const label  = { cancelled: '已取消', past: '已結束', active: '有效' }[status];
     return `<div class="booking-item">
-      <div class="booking-item-left">
+      <div>
         <div class="booking-item-title">${b.title || '（無標題）'}</div>
         <div class="booking-item-meta">
-          <span>🏢 ${b.roomName}</span>
-          <span>📅 ${fmtDate(bDate)}</span>
+          <span>📅 ${b.date}</span>
           <span>🕐 ${b.startTime} – ${b.endTime}</span>
           <span>👤 ${b.name}${b.dept ? '・' + b.dept : ''}</span>
         </div>
@@ -421,109 +441,69 @@ function renderMyBookings(bookings) {
       <div class="booking-item-actions">
         <span class="badge badge-${status}">${label}</span>
         ${status === 'active'
-          ? `<button class="btn btn-outline btn-sm" data-cancel="${b.id}" data-empid="${b.empId}" data-email="${b.email}">取消</button>`
+          ? `<button class="btn btn-outline btn-sm" data-id="${b.id}" data-empid="${b.empId}">取消</button>`
           : ''}
       </div>
     </div>`;
   }).join('');
 
-  $$('[data-cancel]', el).forEach(btn => {
+  $$('[data-id]', el).forEach(btn => {
     btn.addEventListener('click', () => {
       showModal({
         icon: '⚠️', title: '確定取消預約？',
-        body: '取消後無法復原，請確認後再操作。',
+        body: '取消後無法復原。',
         cancelLabel: '返回', onCancel: () => {},
         closeLabel: '確定取消',
         onClose: async () => {
           showLoading();
           try {
-            const res = await apiPost('cancelBooking', {
-              id: btn.dataset.cancel,
-              empId: btn.dataset.empid,
-              email: btn.dataset.email,
-            });
+            const res = await apiPost('cancelBooking', { id: btn.dataset.id, empId: btn.dataset.empid });
             hideLoading();
-            if (res.ok) queryMyBookings();
-            else showModal({ icon: '❌', title: '取消失敗', body: res.error || '請稍後再試' });
-          } catch (err) { hideLoading(); showModal({ icon: '❌', title: '連線錯誤', body: err.message }); }
+            if (res.ok) doQuery();
+            else showModal({ icon: '❌', title: '取消失敗', body: res.error });
+          } catch (err) { hideLoading(); showModal({ icon: '❌', title: '錯誤', body: err.message }); }
         },
       });
     });
   });
 }
 
-/* ── 時程表 ─────────────────────────────────────────────────── */
-function initSchedule() {
-  state.scheduleDate = today();
-  updateScheduleDateLabel();
-  $('#sch-prev').addEventListener('click', () => {
-    state.scheduleDate.setDate(state.scheduleDate.getDate() - 1);
-    updateScheduleDateLabel(); renderSchedule();
-  });
-  $('#sch-next').addEventListener('click', () => {
-    state.scheduleDate.setDate(state.scheduleDate.getDate() + 1);
-    updateScheduleDateLabel(); renderSchedule();
-  });
-  $('#sch-today').addEventListener('click', () => {
-    state.scheduleDate = today(); updateScheduleDateLabel(); renderSchedule();
-  });
-}
-function updateScheduleDateLabel() {
-  const d = state.scheduleDate;
-  const days = ['日','一','二','三','四','五','六'];
-  $('#sch-date-label').textContent = `${fmtDate(d)}（週${days[d.getDay()]}）`;
-}
-
-async function renderSchedule() {
-  const iso = fmtDateISO(state.scheduleDate);
-  showLoading();
-  let bookings = [];
-  try {
-    const res = await apiCall('getBookings', { date: iso });
-    bookings = res.bookings || [];
-  } finally { hideLoading(); }
-
-  const now     = new Date();
-  const isToday = iso === fmtDateISO(today());
-
-  const headerCells = state.rooms.map(r =>
-    `<th class="room-header">${r.name}<br><small style="font-weight:400;color:var(--gray-500)">${r.floor}・${r.capacity}人</small></th>`
-  ).join('');
-
-  const rows = cfg.TIME_SLOTS.map(slot => {
-    const h = parseInt(slot);
-    const isPast = isToday && h < now.getHours();
-    const slotM = timeToMin(slot);
-    const cells = state.rooms.map(room => {
-      const bk = bookings.find(b =>
-        b.roomId === room.id &&
-        slotM >= timeToMin(b.startTime) && slotM < timeToMin(b.endTime)
-      );
-      if (bk) {
-        const cls = isPast ? 'past-booked' : 'booked';
-        return `<td><div class="sch-slot ${cls}">
-          <div class="sch-booking-title">${bk.title || '已預約'}</div>
-          <div class="sch-booking-sub">${bk.name}${bk.dept ? '・'+bk.dept : ''}</div>
-        </div></td>`;
-      }
-      return `<td><div class="sch-slot ${isPast ? 'past-free' : 'free'}"></div></td>`;
-    }).join('');
-    return `<tr><td class="sch-time-cell">${slot}</td>${cells}</tr>`;
-  }).join('');
-
-  $('#schedule-grid').innerHTML = `
-    <table class="sch-table">
-      <thead><tr><th>時段</th>${headerCells}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
-
 /* ── 初始化 ─────────────────────────────────────────────────── */
-async function init() {
-  $$('.nav-btn').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.view)));
-  $('#modal-overlay').addEventListener('click', e => { if (e.target === $('#modal-overlay')) hideModal(); });
-  initCalendar(); initForm(); initMyBookings(); initSchedule();
-  showLoading();
-  try { await loadRooms(); } finally { hideLoading(); }
+function init() {
+  // 導覽
+  $$('.nav-btn').forEach(b => b.addEventListener('click', () => navigate(b.dataset.view)));
+
+  // 週導覽
+  $('#w-prev').addEventListener('click', () => {
+    const m = new Date(state.weekMonday);
+    m.setDate(m.getDate() - 7);
+    loadWeek(m);
+  });
+  $('#w-next').addEventListener('click', () => {
+    const m = new Date(state.weekMonday);
+    m.setDate(m.getDate() + 7);
+    loadWeek(m);
+  });
+  $('#w-today').addEventListener('click', () => loadWeek(getMondayOf(new Date())));
+
+  // 預約 modal
+  $('#bm-close-x').addEventListener('click', closeBmModal);
+  $('#bm-cancel-btn').addEventListener('click', closeBmModal);
+  $('#bm-overlay').addEventListener('click', e => {
+    if (e.target === $('#bm-overlay')) closeBmModal();
+  });
+  initBmForm();
+
+  // 通用 modal
+  $('#modal-overlay').addEventListener('click', e => {
+    if (e.target === $('#modal-overlay')) hideGenericModal();
+  });
+
+  // 我的預約
+  initMyBookings();
+
+  // 載入本週
+  loadWeek(getMondayOf(new Date()));
 }
+
 document.addEventListener('DOMContentLoaded', init);

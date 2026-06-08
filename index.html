@@ -3,177 +3,137 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>會議室預約系統</title>
+  <title>測試室預約系統</title>
   <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
-  <header class="header">
-    <div class="header-inner">
-      <div class="header-logo">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
-        </svg>
-        <span>會議室預約</span>
-      </div>
-      <nav class="header-nav">
-        <button class="nav-btn active" data-view="booking">預約</button>
-        <button class="nav-btn" data-view="my-bookings">我的預約</button>
-        <button class="nav-btn" data-view="schedule">時程表</button>
-      </nav>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
+      測試室預約
     </div>
-  </header>
+    <nav class="header-nav">
+      <button class="nav-btn active" data-view="week">週曆</button>
+      <button class="nav-btn" data-view="my">我的預約</button>
+    </nav>
+  </div>
+</header>
 
-  <main class="main">
+<main class="main">
 
-    <!-- ── 預約頁 ── -->
-    <section id="view-booking" class="view active">
-      <div class="page-title">
-        <h1>預約會議室</h1>
-        <p>選擇會議室與時段，填寫資訊後送出預約</p>
+  <!-- ── 週曆 ── -->
+  <section id="view-week" class="view active">
+    <div class="week-toolbar">
+      <div class="week-nav">
+        <button id="w-prev" class="icon-btn">&#8249;</button>
+        <span id="w-label" class="week-label"></span>
+        <button id="w-next" class="icon-btn">&#8250;</button>
       </div>
-
-      <div class="booking-layout">
-        <!-- 左：選擇區 -->
-        <div class="booking-panel">
-
-          <!-- 步驟 1：會議室 -->
-          <div class="step-card">
-            <div class="step-header"><span class="step-num">1</span>選擇會議室</div>
-            <div id="room-list" class="room-list">
-              <div class="loading-placeholder">載入中…</div>
-            </div>
-          </div>
-
-          <!-- 步驟 2：日期 -->
-          <div class="step-card">
-            <div class="step-header"><span class="step-num">2</span>選擇日期</div>
-            <div class="calendar-wrapper">
-              <div class="cal-nav">
-                <button id="cal-prev" class="cal-arrow">&#8249;</button>
-                <span id="cal-month-label" class="cal-month"></span>
-                <button id="cal-next" class="cal-arrow">&#8250;</button>
-              </div>
-              <div class="cal-grid">
-                <div class="cal-dow">日</div><div class="cal-dow">一</div>
-                <div class="cal-dow">二</div><div class="cal-dow">三</div>
-                <div class="cal-dow">四</div><div class="cal-dow">五</div>
-                <div class="cal-dow">六</div>
-                <div id="cal-days"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 步驟 3：時段 -->
-          <div class="step-card">
-            <div class="step-header"><span class="step-num">3</span>選擇時段</div>
-            <p style="font-size:.82rem;color:var(--gray-500);margin-bottom:10px">
-              點選<strong>起始時間</strong>，再點選<strong>結束時間</strong>（例：09:00 → 11:00 表示使用 2 小時）
-            </p>
-            <div id="time-slots" class="time-slots">
-              <p class="hint">請先選擇會議室與日期</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 右：表單 -->
-        <div class="form-panel">
-          <div class="step-card form-card">
-            <div class="step-header"><span class="step-num">4</span>填寫預約資訊</div>
-
-            <div id="booking-summary" class="booking-summary hidden">
-              <div class="summary-row"><span class="summary-icon">🏢</span><span id="sum-room"></span></div>
-              <div class="summary-row"><span class="summary-icon">📅</span><span id="sum-date"></span></div>
-              <div class="summary-row"><span class="summary-icon">🕐</span><span id="sum-time"></span></div>
-            </div>
-
-            <form id="booking-form" class="booking-form">
-              <div class="form-group">
-                <label for="f-name">姓名 <span class="required">*</span></label>
-                <input id="f-name" type="text" placeholder="您的姓名" required />
-              </div>
-              <div class="form-group">
-                <label for="f-empid">員工編號 <span class="required">*</span></label>
-                <input id="f-empid" type="text" placeholder="員工編號" required />
-              </div>
-              <div class="form-group">
-                <label for="f-email">電子郵件</label>
-                <input id="f-email" type="email" placeholder="example@company.com（選填）" />
-              </div>
-              <div class="form-group">
-                <label for="f-dept">部門</label>
-                <input id="f-dept" type="text" placeholder="所屬部門（選填）" />
-              </div>
-              <div class="form-group">
-                <label for="f-title">會議主題 <span class="required">*</span></label>
-                <input id="f-title" type="text" placeholder="請填寫會議主題" required />
-              </div>
-              <div class="form-group">
-                <label for="f-attendees">預計人數 <span class="required">*</span></label>
-                <input id="f-attendees" type="number" min="1" max="100" placeholder="人數" required />
-              </div>
-              <div class="form-group">
-                <label for="f-note">備註</label>
-                <textarea id="f-note" rows="3" placeholder="其他需求或備註（選填）"></textarea>
-              </div>
-
-              <button type="submit" id="submit-btn" class="btn btn-primary" disabled>送出預約</button>
-              <p id="form-msg" class="form-msg"></p>
-            </form>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── 我的預約 ── -->
-    <section id="view-my-bookings" class="view">
-      <div class="page-title">
-        <h1>我的預約</h1>
-        <p>查詢您的預約紀錄</p>
-      </div>
-      <div class="query-bar">
-        <input id="query-empid" type="text" placeholder="輸入員工編號" />
-        <button id="query-btn" class="btn btn-primary">查詢</button>
-      </div>
-      <div id="my-bookings-list" class="bookings-list"></div>
-    </section>
-
-    <!-- ── 時程表 ── -->
-    <section id="view-schedule" class="view">
-      <div class="page-title">
-        <h1>時程表</h1>
-        <p>查看所有會議室的預約狀況</p>
-      </div>
-      <div class="schedule-controls">
-        <div class="schedule-date-nav">
-          <button id="sch-prev" class="cal-arrow">&#8249;</button>
-          <span id="sch-date-label"></span>
-          <button id="sch-next" class="cal-arrow">&#8250;</button>
-        </div>
-        <button id="sch-today" class="btn btn-outline">今天</button>
-      </div>
-      <div id="schedule-grid" class="schedule-grid"></div>
-    </section>
-
-  </main>
-
-  <!-- Modal -->
-  <div id="modal-overlay" class="modal-overlay hidden">
-    <div class="modal">
-      <div id="modal-icon" class="modal-icon"></div>
-      <h2 id="modal-title"></h2>
-      <p id="modal-body"></p>
-      <div class="modal-actions">
-        <button id="modal-cancel" class="btn btn-outline hidden">取消預約</button>
-        <button id="modal-close" class="btn btn-primary">確認</button>
+      <button id="w-today" class="btn btn-outline">本週</button>
+    </div>
+    <div class="week-grid-wrapper">
+      <div id="week-grid" class="week-grid-scroll">
+        <div class="loading-box">載入中…</div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div id="loading-overlay" class="loading-overlay hidden">
-    <div class="spinner"></div>
-  </div>
+  <!-- ── 我的預約 ── -->
+  <section id="view-my" class="view">
+    <div class="page-title">
+      <h1>我的預約</h1>
+      <p>輸入員工編號查詢預約紀錄</p>
+    </div>
+    <div class="query-bar">
+      <input id="query-empid" type="text" placeholder="員工編號" />
+      <button id="query-btn" class="btn btn-primary">查詢</button>
+    </div>
+    <div id="my-list" class="bookings-list"></div>
+  </section>
 
-  <script src="src/config.js"></script>
-  <script src="src/app.js"></script>
+</main>
+
+<!-- ── 預約 Modal ── -->
+<div id="bm-overlay" class="modal-overlay hidden">
+  <div class="modal bm-modal">
+    <button id="bm-close-x" class="modal-close-x">✕</button>
+    <h2 class="bm-title">預約測試室</h2>
+
+    <div class="bm-info">
+      <span id="bm-date-label"></span>
+      <span class="bm-sep">·</span>
+      <span id="bm-time-label"></span>
+    </div>
+
+    <div class="bm-duration">
+      <label class="field-label">使用時間</label>
+      <div id="dur-btns" class="dur-btns"></div>
+      <p class="bm-endtime">結束時間：<strong id="bm-end-label"></strong></p>
+      <p id="dur-warn" class="dur-warn hidden"></p>
+    </div>
+
+    <form id="bm-form" class="bm-form" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label>姓名 <span class="req">*</span></label>
+          <input id="f-name" type="text" placeholder="您的姓名" required />
+        </div>
+        <div class="form-group">
+          <label>員工編號 <span class="req">*</span></label>
+          <input id="f-empid" type="text" placeholder="員工編號" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>部門</label>
+          <input id="f-dept" type="text" placeholder="部門（選填）" />
+        </div>
+        <div class="form-group">
+          <label>預計人數 <span class="req">*</span></label>
+          <input id="f-attendees" type="number" min="1" max="50" placeholder="人數" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>會議主題 <span class="req">*</span></label>
+        <input id="f-title" type="text" placeholder="請填寫會議主題" required />
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="f-note" rows="2" placeholder="其他需求（選填）"></textarea>
+      </div>
+
+      <div class="bm-actions">
+        <button type="button" id="bm-cancel-btn" class="btn btn-outline">取消</button>
+        <button type="submit" id="bm-submit-btn" class="btn btn-primary">送出預約</button>
+      </div>
+      <p id="bm-msg" class="form-msg"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ── 通用確認 Modal ── -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div id="modal-icon" class="modal-icon"></div>
+    <h2 id="modal-title"></h2>
+    <p id="modal-body"></p>
+    <div class="modal-actions">
+      <button id="modal-cancel" class="btn btn-outline hidden">取消</button>
+      <button id="modal-close" class="btn btn-primary">確認</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="spinner"></div>
+</div>
+
+<script src="src/config.js"></script>
+<script src="src/app.js"></script>
 </body>
 </html>

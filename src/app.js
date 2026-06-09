@@ -211,6 +211,17 @@ function renderWeekGrid(dates) {
   const nowMin   = now.getHours() * 60 + now.getMinutes();
   const DAY_NAMES = ['週一','週二','週三','週四','週五'];
 
+  // 計算可預約截止日（今天 + BOOK_AHEAD_DAYS - 1）
+  const deadlineDate = new Date(todayMidnight());
+  deadlineDate.setDate(deadlineDate.getDate() + (cfg.BOOK_AHEAD_DAYS ?? 14) - 1);
+  const deadlineISO = fmtDateISO(deadlineDate);
+
+  // 更新下週按鈕：若下週一已超出截止日則 disable
+  const nextMonday = new Date(state.weekMonday);
+  nextMonday.setDate(nextMonday.getDate() + 7);
+  $('#w-next').disabled = fmtDateISO(nextMonday) > deadlineISO;
+  $('#w-next').style.opacity = $('#w-next').disabled ? '0.35' : '';
+
   const consumedByDay = dates.map(() => new Set());
   const bookingStart  = dates.map(() => ({}));
 
@@ -260,9 +271,10 @@ function renderWeekGrid(dates) {
           <div class="booked-time">${bk.startTime}–${bk.endTime}</div>
         </td>`;
       }
-      const isToday = iso === todayISO;
-      const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
-      return `<td class="slot-empty${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}${isToday ? ' today-col' : ''}"
+      const isToday  = iso === todayISO;
+      const isPast   = iso < todayISO || (iso === todayISO && slotM < nowMin);
+      const isTooFar = iso > deadlineISO;
+      return `<td class="slot-empty${(isPast || isTooFar) ? ' past' : ''}${isHour ? ' hour-line' : ''}${isToday ? ' today-col' : ''}"
                   data-date="${iso}" data-time="${slot}"></td>`;
     }).join('');
 

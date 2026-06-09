@@ -546,7 +546,7 @@ function buildEditDateSel() {
   const t = todayMidnight();
   const DAY_NAMES = ['日','一','二','三','四','五','六'];
   const opts = [];
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < (cfg.BOOK_AHEAD_DAYS ?? 14); i++) {
     const d = new Date(t);
     d.setDate(t.getDate() + i);
     const iso = fmtDateISO(d);

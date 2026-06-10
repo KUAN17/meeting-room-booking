@@ -569,11 +569,12 @@ function openEditModal(bk) {
   emState.endTime   = bk.endTime;
   emState.bookingsCache = {};
 
-  $('#em-name').value  = bk.name;
-  $('#em-empid').value = bk.empId;
-  $('#em-dept').value  = bk.dept || '';
-  $('#em-note').value  = bk.note || '';
-  $('#em-msg').textContent = '';
+  $('#em-name').value         = bk.name;
+  $('#em-empid').value        = bk.empId;
+  $('#em-empid-verify').value = '';
+  $('#em-dept').value         = bk.dept || '';
+  $('#em-note').value         = bk.note || '';
+  $('#em-msg').textContent    = '';
 
   // 同步部門按鈕 active
   const deptVal = bk.dept || '';
@@ -676,7 +677,10 @@ function initEditForm() {
     const startTime = $('#em-start-sel').value;
     const endTime   = $('#em-end-sel').value;
 
+    const empIdVerify = $('#em-empid-verify').value.trim();
     if (!name) { setEditMsg('請填寫姓名', 'error'); return; }
+    if (!empIdVerify) { setEditMsg('請輸入員工編號以確認身份', 'error'); return; }
+    if (empIdVerify !== emState.empId) { setEditMsg('員工編號不符，無法儲存', 'error'); return; }
     if (timeToMin(endTime) <= timeToMin(startTime)) { setEditMsg('結束時間須晚於開始時間', 'error'); return; }
 
     showLoading();

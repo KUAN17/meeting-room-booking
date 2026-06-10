@@ -67,12 +67,6 @@
 
 <!-- ── 部門選項 datalist ── -->
 <datalist id="dept-options">
-  <option value="AQ">
-  <option value="RT">
-  <option value="B&C">
-  <option value="SPM">
-  <option value="PR">
-</datalist>
 
 <!-- ── 預約 Modal ── -->
 <div id="bm-overlay" class="modal-overlay hidden">
@@ -108,7 +102,14 @@
       </div>
       <div class="form-group">
         <label>部門</label>
-        <input id="f-dept" type="text" list="dept-options" placeholder="選擇或輸入部門（選填）" autocomplete="off" />
+        <input id="f-dept" type="text" placeholder="選擇或輸入部門（選填）" autocomplete="off" />
+        <div class="dept-btns">
+          <button type="button" class="dept-tag" data-target="f-dept">AQ</button>
+          <button type="button" class="dept-tag" data-target="f-dept">RT</button>
+          <button type="button" class="dept-tag" data-target="f-dept">B&amp;C</button>
+          <button type="button" class="dept-tag" data-target="f-dept">SPM</button>
+          <button type="button" class="dept-tag" data-target="f-dept">PR</button>
+        </div>
       </div>
       <div class="form-group">
         <label>備註</label>
@@ -174,7 +175,14 @@
       </div>
       <div class="form-group">
         <label>部門</label>
-        <input id="em-dept" type="text" list="dept-options" autocomplete="off" />
+        <input id="em-dept" type="text" autocomplete="off" />
+        <div class="dept-btns">
+          <button type="button" class="dept-tag" data-target="em-dept">AQ</button>
+          <button type="button" class="dept-tag" data-target="em-dept">RT</button>
+          <button type="button" class="dept-tag" data-target="em-dept">B&amp;C</button>
+          <button type="button" class="dept-tag" data-target="em-dept">SPM</button>
+          <button type="button" class="dept-tag" data-target="em-dept">PR</button>
+        </div>
       </div>
       <div class="form-group">
         <label>備註</label>

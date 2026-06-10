@@ -18,7 +18,7 @@
       測試室預約
     </div>
     <nav class="header-nav">
-      <button class="nav-btn active" data-view="week">週曆</button>
+      <button class="nav-btn active" data-view="week">預約會議</button>
       <button class="nav-btn" data-view="my">我的預約</button>
     </nav>
   </div>
@@ -26,7 +26,7 @@
 
 <main class="main">
 
-  <!-- ── 週曆 ── -->
+  <!-- ── 預約會議 ── -->
   <section id="view-week" class="view active">
     <div class="week-toolbar">
       <div class="week-nav">
@@ -36,7 +36,13 @@
       </div>
       <button id="w-today" class="btn btn-outline">本週</button>
     </div>
-    <p id="w-deadline-notice" class="week-deadline-notice"></p>
+    <div class="week-usage-notice">
+      <strong>操作方式</strong>
+      <ol>
+        <li>預約會議：<span id="w-deadline-notice"></span></li>
+        <li>我的預約：輸入員編可查詢並編輯預約時段。</li>
+      </ol>
+    </div>
     <div class="week-grid-wrapper">
       <div id="week-grid" class="week-grid-scroll">
         <div class="loading-box">載入中…</div>
@@ -58,6 +64,15 @@
   </section>
 
 </main>
+
+<!-- ── 部門選項 datalist ── -->
+<datalist id="dept-options">
+  <option value="AQ">
+  <option value="RT">
+  <option value="B&C">
+  <option value="SPM">
+  <option value="PR">
+</datalist>
 
 <!-- ── 預約 Modal ── -->
 <div id="bm-overlay" class="modal-overlay hidden">
@@ -93,7 +108,7 @@
       </div>
       <div class="form-group">
         <label>部門</label>
-        <input id="f-dept" type="text" placeholder="部門（選填）" />
+        <input id="f-dept" type="text" list="dept-options" placeholder="選擇或輸入部門（選填）" autocomplete="off" />
       </div>
       <div class="form-group">
         <label>備註</label>
@@ -159,7 +174,7 @@
       </div>
       <div class="form-group">
         <label>部門</label>
-        <input id="em-dept" type="text" />
+        <input id="em-dept" type="text" list="dept-options" autocomplete="off" />
       </div>
       <div class="form-group">
         <label>備註</label>

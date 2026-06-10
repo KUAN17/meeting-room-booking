@@ -222,10 +222,10 @@ function renderWeekGrid(dates) {
   // 截止日 = 下週五（當週週一 + 7 天 = 下週一，再 + 4 = 下週五）
   const deadlineISO = getDeadlineISO();
 
-  // 更新說明文字
+  // 更新說明文字（只填入日期片段，句構由 HTML 控制）
   const dl = new Date(deadlineISO + 'T00:00:00');
   $('#w-deadline-notice').textContent =
-    `可預約至下週五：今日起至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）`;
+    `可預約至下週五：今日起至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）。`;
 
   // 更新下週按鈕：若下週一已超出截止日則 disable
   const nextMonday = new Date(state.weekMonday);

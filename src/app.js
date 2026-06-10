@@ -152,6 +152,14 @@ function navigate(view) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
 }
 
+/* ── 截止日計算（下週五）────────────────────────────────────── */
+function getDeadlineISO() {
+  const monday = getMondayOf(new Date());       // 本週週一
+  const nextFri = new Date(monday);
+  nextFri.setDate(monday.getDate() + 7 + 4);   // +7 = 下週一, +4 = 下週五
+  return fmtDateISO(nextFri);
+}
+
 /* ── 週曆：載入 ──────────────────────────────────────────────── */
 function getWeekDates(monday) {
   return Array.from({ length: 5 }, (_, i) => {
@@ -211,10 +219,13 @@ function renderWeekGrid(dates) {
   const nowMin   = now.getHours() * 60 + now.getMinutes();
   const DAY_NAMES = ['週一','週二','週三','週四','週五'];
 
-  // 計算可預約截止日（今天 + BOOK_AHEAD_DAYS - 1）
-  const deadlineDate = new Date(todayMidnight());
-  deadlineDate.setDate(deadlineDate.getDate() + (cfg.BOOK_AHEAD_DAYS ?? 14) - 1);
-  const deadlineISO = fmtDateISO(deadlineDate);
+  // 截止日 = 下週五（當週週一 + 7 天 = 下週一，再 + 4 = 下週五）
+  const deadlineISO = getDeadlineISO();
+
+  // 更新說明文字
+  const dl = new Date(deadlineISO + 'T00:00:00');
+  $('#w-deadline-notice').textContent =
+    `可預約至下週五：今日起至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）`;
 
   // 更新下週按鈕：若下週一已超出截止日則 disable
   const nextMonday = new Date(state.weekMonday);
@@ -291,6 +302,17 @@ function renderWeekGrid(dates) {
   // 空格 → 新增預約
   $$('.slot-empty:not(.past)', $('#week-grid')).forEach(td => {
     td.addEventListener('click', () => openBookingModal(td.dataset.date, td.dataset.time));
+  });
+
+  // 灰色空格 → 提示不可預約
+  $$('.slot-empty.past', $('#week-grid')).forEach(td => {
+    td.addEventListener('click', () => {
+      const dl = new Date(deadlineISO + 'T00:00:00');
+      const msg = td.dataset.date < todayISO
+        ? '此時段已過期，無法預約。'
+        : `超出可預約範圍，僅開放至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）。`;
+      showModal({ icon: '🚫', title: '無法預約', body: msg });
+    });
   });
 
   // 已預約格子 → 編輯
@@ -556,11 +578,13 @@ function closeEditModal() { $('#em-overlay').classList.add('hidden'); }
 
 function buildEditDateSel() {
   const t = todayMidnight();
+  const deadlineISO = getDeadlineISO();
   const DAY_NAMES = ['日','一','二','三','四','五','六'];
   const opts = [];
-  for (let i = 0; i < (cfg.BOOK_AHEAD_DAYS ?? 14); i++) {
+  for (let i = 0; ; i++) {
     const d = new Date(t);
     d.setDate(t.getDate() + i);
+    if (fmtDateISO(d) > deadlineISO) break;
     const iso = fmtDateISO(d);
     opts.push(`<option value="${iso}" ${iso === emState.date ? 'selected' : ''}>` +
       `${fmtDateDisplay(d)}（週${DAY_NAMES[d.getDay()]}）</option>`);

@@ -78,6 +78,10 @@ body {
   margin-bottom: 16px;
 }
 .week-nav { display: flex; align-items: center; gap: 10px; }
+.week-deadline-notice {
+  font-size: .82rem; color: var(--gray-500);
+  margin-bottom: 10px; margin-top: -8px;
+}
 .week-label { font-weight: 700; font-size: 1.05rem; min-width: 220px; text-align: center; }
 .icon-btn {
   width: 32px; height: 32px; border-radius: 7px;

@@ -12,10 +12,11 @@
   <div class="header-inner">
     <div class="header-logo">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <path d="M3 9h18M9 21V9"/>
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path d="M16 2v4M8 2v4M3 10h18"/>
+        <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>
       </svg>
-      測試室預約
+      測試室預約小工具
     </div>
     <nav class="header-nav">
       <button class="nav-btn active" data-view="week">預約會議</button>
@@ -36,13 +37,35 @@
       </div>
       <button id="w-today" class="btn btn-outline">本週</button>
     </div>
-    <div class="week-usage-notice">
-      <strong>操作方式</strong>
-      <ol>
-        <li>預約會議：<span id="w-deadline-notice"></span></li>
-        <li>我的預約：輸入員編可查詢並編輯預約時段。</li>
-      </ol>
+    <div class="usage-cards">
+      <div class="usage-card">
+        <div class="usage-card-title">📅 預約會議室</div>
+        <ol>
+          <li>點選週曆上的空白時段</li>
+          <li>選擇結束時間</li>
+          <li>填入姓名、員編、部門</li>
+          <li>按「送出預約」</li>
+        </ol>
+      </div>
+      <div class="usage-card">
+        <div class="usage-card-title">❌ 取消預約</div>
+        <ol>
+          <li>點上方「我的預約」</li>
+          <li>輸入員編查詢紀錄</li>
+          <li>找到預約後按「取消」</li>
+        </ol>
+      </div>
+      <div class="usage-card">
+        <div class="usage-card-title">✏️ 修改預約</div>
+        <ol>
+          <li>在週曆點擊已預約時段</li>
+          <li>修改所需內容</li>
+          <li>輸入員編確認身份</li>
+          <li>按「儲存變更」</li>
+        </ol>
+      </div>
     </div>
+    <p id="w-deadline-notice" class="deadline-hint"></p>
     <div class="week-grid-wrapper">
       <div id="week-grid" class="week-grid-scroll">
         <div class="loading-box">載入中…</div>

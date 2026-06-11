@@ -78,12 +78,28 @@ body {
   margin-bottom: 16px;
 }
 .week-nav { display: flex; align-items: center; gap: 10px; }
-.week-usage-notice {
-  font-size: .82rem; color: var(--gray-500);
-  margin-bottom: 12px; margin-top: -8px;
-  line-height: 1.8;
+.usage-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-bottom: 14px; margin-top: -4px;
 }
-.week-usage-notice strong { color: var(--gray-700); }
+@media (max-width: 640px) { .usage-cards { grid-template-columns: 1fr; } }
+.usage-card {
+  background: #fff; border: 1px solid var(--gray-200);
+  border-radius: var(--radius); padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.usage-card-title {
+  font-size: .88rem; font-weight: 700; color: var(--gray-700);
+  margin-bottom: 8px;
+}
+.usage-card ol {
+  padding-left: 18px; margin: 0;
+  font-size: .82rem; color: var(--gray-500); line-height: 1.9;
+}
+.deadline-hint {
+  font-size: .78rem; color: var(--gray-400);
+  margin-bottom: 10px; margin-top: -4px;
+}
 .week-label { font-weight: 700; font-size: 1.05rem; min-width: 220px; text-align: center; }
 .icon-btn {
   width: 32px; height: 32px; border-radius: 7px;

@@ -166,6 +166,8 @@ function setupSheets() {
     ? bSheet.getRange(1, 1, 1, bSheet.getLastColumn()).getValues()[0]
     : [];
   headers.forEach((h, i) => { if (!existing[i]) bSheet.getRange(1, i + 1).setValue(h); });
+  // emp_id 欄（G欄，index 6）強制設為文字格式
+  bSheet.getRange(1, COL.EMP_ID + 1, bSheet.getMaxRows(), 1).setNumberFormat('@');
   bSheet.setFrozenRows(1);
   bSheet.getRange(1, 1, 1, headers.length)
         .setBackground('#2563eb').setFontColor('#ffffff').setFontWeight('bold');
@@ -268,6 +270,9 @@ function createBooking(params) {
     row[COL.ATTENDEES] = attendees || '';
     row[COL.NOTE]      = note      || '';
     sheet.appendRow(row);
+    // 強制將 emp_id 欄設為文字格式，防止 Sheets 自動去除前導零
+    const newRow = sheet.getLastRow();
+    sheet.getRange(newRow, COL.EMP_ID + 1).setNumberFormat('@');
     return { ok: true, bookingId: id };
   } catch (e) {
     if (e.message && e.message.includes('Lock')) {

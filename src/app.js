@@ -341,11 +341,6 @@ function openBookingModal(date, startTime) {
   if (mem.empId) $('#f-empid').value = mem.empId;
   if (mem.dept)  $('#f-dept').value  = mem.dept;
 
-  // 同步部門按鈕 active
-  $$('.dept-tag[data-target="f-dept"]').forEach(b => {
-    b.classList.toggle('active', b.textContent === (mem.dept || ''));
-  });
-
   $('#f-note').value = '';
   $('#bm-msg').textContent = '';
 
@@ -576,12 +571,6 @@ function openEditModal(bk) {
   $('#em-note').value         = bk.note || '';
   $('#em-msg').textContent    = '';
 
-  // 同步部門按鈕 active
-  const deptVal = bk.dept || '';
-  $$('.dept-tag[data-target="em-dept"]').forEach(b => {
-    b.classList.toggle('active', b.textContent === deptVal);
-  });
-
   buildEditDateSel();
   $('#em-overlay').classList.remove('hidden');
 }
@@ -710,27 +699,6 @@ function setEditMsg(txt, type = '') {
   el.className = 'form-msg' + (type ? ' ' + type : '');
 }
 
-/* ── 部門快速選鈕 ───────────────────────────────────────────── */
-function initDeptTags() {
-  $$('.dept-tag').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = $(`#${btn.dataset.target}`);
-      const val = btn.textContent;
-      input.value = val;
-      // 同群組 active 切換
-      $$('.dept-tag', btn.closest('.dept-btns')).forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-  // 手動輸入時清除 active
-  ['f-dept', 'em-dept'].forEach(id => {
-    $(`#${id}`).addEventListener('input', () => {
-      $$('.dept-tag', $(`#${id}`).nextElementSibling)
-        .forEach(b => b.classList.remove('active'));
-    });
-  });
-}
-
 /* ── 初始化 ─────────────────────────────────────────────────── */
 function init() {
   $$('.nav-btn').forEach(b => b.addEventListener('click', () => navigate(b.dataset.view)));
@@ -750,7 +718,6 @@ function init() {
   $('#modal-overlay').addEventListener('click', e => { if (e.target === $('#modal-overlay')) hideGenericModal(); });
   initBmForm();
   initEditForm();
-  initDeptTags();
   initMyBookings();
   loadWeek(getMondayOf(new Date()));
 }

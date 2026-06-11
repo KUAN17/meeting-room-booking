@@ -524,7 +524,7 @@ function renderMyList(bks) {
 
   $$('[data-action="edit"]', el).forEach(btn => {
     btn.addEventListener('click', () => {
-      openEditModal(myBookingsList[+btn.dataset.idx]);
+      openEditModal(myBookingsList[+btn.dataset.idx], true);
     });
   });
   $$('[data-action="cancel"]', el).forEach(btn => {
@@ -555,7 +555,7 @@ const emState = {
   bookingsCache: {},
 };
 
-function openEditModal(bk) {
+function openEditModal(bk, autoFill = false) {
   emState.id        = bk.id;
   emState.empId     = bk.empId;
   emState.roomId    = bk.roomId || cfg.ROOM.id;
@@ -566,7 +566,12 @@ function openEditModal(bk) {
 
   $('#em-name').value         = bk.name;
   $('#em-empid').value        = bk.empId;
-  $('#em-empid-verify').value = '';
+  $('#em-empid-verify').value = autoFill ? bk.empId : '';
+
+  // 從「我的預約」進入：隱藏驗證欄位；從週曆進入：顯示
+  const verifyRow = $('#em-empid-verify').closest('.form-group');
+  verifyRow.style.display = autoFill ? 'none' : '';
+
   $('#em-dept').value         = bk.dept || '';
   $('#em-note').value         = bk.note || '';
   $('#em-msg').textContent    = '';

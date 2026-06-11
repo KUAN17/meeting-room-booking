@@ -311,6 +311,14 @@ body {
 }
 .dur-warn.hidden { display: none; }
 
+.quota-banner {
+  margin-bottom: 14px; font-size: .85rem;
+  color: #92400e; background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px; padding: 8px 14px;
+}
+.quota-banner.hidden { display: none; }
+
 /* form inside modal */
 .bm-form { display: flex; flex-direction: column; gap: 12px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

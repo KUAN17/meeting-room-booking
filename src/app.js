@@ -23,9 +23,9 @@ function generateSlots() {
   for (let m = cfg.START_HOUR * 60; m < cfg.END_HOUR * 60; m += 30) slots.push(minToTime(m));
   return slots;
 }
-const SLOTS = generateSlots();  // ['08:00','08:30',...,'17:30']
-// 結束時間選項包含 18:00
-const END_SLOTS = [...SLOTS.slice(1), minToTime(cfg.END_HOUR * 60)];  // ['08:30',...,'18:00']
+const SLOTS = generateSlots();  // ['09:00','09:30',...,'18:30']
+// 結束時間選項額外包含收檔時間 19:00
+const END_SLOTS = [...SLOTS.slice(1), minToTime(cfg.END_HOUR * 60)];  // ['09:30',...,'19:00']
 
 function getMondayOf(date) {
   const d = new Date(date);
@@ -33,6 +33,14 @@ function getMondayOf(date) {
   d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+// 週六、週日開啟時顯示即將開始的一週，而非已結束的當週
+function getInitialMonday() {
+  const today = new Date();
+  const monday = getMondayOf(today);
+  if (today.getDay() === 0 || today.getDay() === 6) monday.setDate(monday.getDate() + 7);
+  return monday;
 }
 
 function showLoading() { $('#loading-overlay').classList.remove('hidden'); }
@@ -67,12 +75,15 @@ async function apiGet(action, params = {}) {
   const res = await fetch(url.toString(), { redirect: 'follow' });
   if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`);
   const text = await res.text();
+  let json;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch {
     console.error('GAS 回應內容：', text);
     throw new Error('GAS 回應格式錯誤，請確認已重新部署最新版 Code.gs');
   }
+  if (json && json._quotaWarn) $('#quota-banner').classList.remove('hidden');
+  return json;
 }
 
 /* ── 模擬後端 ────────────────────────────────────────────────── */
@@ -85,6 +96,13 @@ function toPublicBooking(b) {
   return pub;
 }
 const sameEmpId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+
+function isPastStart(date, startTime) {
+  const now = new Date();
+  const nowISO = fmtDateISO(now);
+  const nowHM  = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return date < nowISO || (date === nowISO && startTime < nowHM);
+}
 
 async function mockApi(action, p) {
   await new Promise(r => setTimeout(r, 150));
@@ -103,9 +121,12 @@ async function mockApi(action, p) {
     ).map(toPublicBooking)};
   }
   if (action === 'getMyBookings') {
-    return { ok: true, bookings: mockDB.bookings.filter(b => b.empId === p.empId) };
+    return { ok: true, bookings: mockDB.bookings
+      .filter(b => sameEmpId(b.empId, p.empId))
+      .sort((a, b) => new Date(b.date) - new Date(a.date)) };
   }
   if (action === 'createBooking') {
+    if (isPastStart(p.date, p.startTime)) return { ok: false, error: '無法預約已過去的時段' };
     const conflict = mockDB.bookings.some(b =>
       b.status !== 'cancelled' && b.date === p.date && b.roomId === p.roomId &&
       p.startTime < b.endTime && p.endTime > b.startTime
@@ -117,15 +138,21 @@ async function mockApi(action, p) {
     return { ok: true, bookingId: id };
   }
   if (action === 'cancelBooking') {
-    const idx = mockDB.bookings.findIndex(b => b.id === p.id && b.empId === p.empId);
+    const idx = mockDB.bookings.findIndex(b => b.id === p.id && sameEmpId(b.empId, p.empId));
     if (idx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
     mockDB.bookings[idx].status = 'cancelled';
     saveMock();
     return { ok: true };
   }
   if (action === 'updateBooking') {
-    const idx = mockDB.bookings.findIndex(b => b.id === p.id && b.empId === p.empId);
+    const idx = mockDB.bookings.findIndex(b => b.id === p.id && sameEmpId(b.empId, p.empId));
     if (idx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
+    const cur = mockDB.bookings[idx];
+    if (cur.status === 'cancelled') return { ok: false, error: '此預約已取消，無法修改' };
+    const sameStart = cur.date === p.date && cur.startTime === p.startTime;
+    if (!sameStart && isPastStart(p.date, p.startTime)) {
+      return { ok: false, error: '無法將預約改到已過去的時段' };
+    }
     const conflict = mockDB.bookings.some(b =>
       b.id !== p.id && b.status !== 'cancelled' &&
       b.date === p.date && b.roomId === p.roomId &&
@@ -153,7 +180,7 @@ function saveMemory(name, empId, dept) {
 
 /* ── 狀態 ───────────────────────────────────────────────────── */
 const state = {
-  weekMonday:   getMondayOf(new Date()),
+  weekMonday:   getInitialMonday(),
   weekBookings: {},  // { 'YYYY-MM-DD': [...] }
   bm: { date: null, startTime: null, endTime: null },
 };
@@ -286,7 +313,8 @@ function renderWeekGrid(dates) {
       if (bk) {
         const endM    = timeToMin(bk.endTime);
         const rowspan = Math.round((endM - slotM) / 30);
-        const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
+        // 以結束時間判斷，進行中的會議仍可點擊編輯
+        const isPast  = iso < todayISO || (iso === todayISO && endM <= nowMin);
         return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}"
                     rowspan="${rowspan}" data-bk-id="${escapeHtml(bk.id)}">
           <div class="booked-name">${escapeHtml(bk.name)}</div>
@@ -377,12 +405,17 @@ function buildTimeSelects() {
   const startSel = $('#bm-start-sel');
   const endSel   = $('#bm-end-sel');
 
-  // ── 開始時間選單（標記已佔用時段）──
+  // ── 開始時間選單（標記已佔用、已過去時段）──
   const bks = state.weekBookings[state.bm.date] || [];
+  const todayISO = fmtDateISO(todayMidnight());
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   startSel.innerHTML = SLOTS.map(s => {
     const sMin = timeToMin(s);
     const busy = bks.some(b => timeToMin(b.startTime) <= sMin && sMin < timeToMin(b.endTime));
-    return `<option value="${s}" ${s === state.bm.startTime ? 'selected' : ''} ${busy ? 'disabled' : ''}>${s}${busy ? '（已被佔用）' : ''}</option>`;
+    const past = state.bm.date === todayISO && sMin < nowMin;
+    const tag  = busy ? '（已被佔用）' : past ? '（已過）' : '';
+    return `<option value="${s}" ${s === state.bm.startTime ? 'selected' : ''} ${(busy || past) ? 'disabled' : ''}>${s}${tag}</option>`;
   }).join('');
   // 若預設開始時間剛好落在佔用區間，改選下一個可用時段
   if (startSel.options[startSel.selectedIndex]?.disabled) {
@@ -606,11 +639,16 @@ function buildEditDateSel() {
     const d = new Date(t);
     d.setDate(t.getDate() + i);
     if (fmtDateISO(d) > deadlineISO) break;
+    if (d.getDay() === 0 || d.getDay() === 6) continue;  // 週曆僅顯示週一～五，不開放改到週末
     const iso = fmtDateISO(d);
     opts.push(`<option value="${iso}" ${iso === emState.date ? 'selected' : ''}>` +
       `${fmtDateDisplay(d)}（週${DAY_NAMES[d.getDay()]}）</option>`);
   }
   $('#em-date-sel').innerHTML = opts.join('');
+  // 原日期不在可選範圍時（如舊資料落在週末），同步為實際選中的日期
+  if ($('#em-date-sel').value && $('#em-date-sel').value !== emState.date) {
+    emState.date = $('#em-date-sel').value;
+  }
   loadEditBookingsAndBuildTime(emState.date);
   $('#em-date-sel').onchange = () => {
     emState.date = $('#em-date-sel').value;
@@ -634,6 +672,9 @@ async function loadEditBookingsAndBuildTime(date) {
 function buildEditTimeSelects(otherBks) {
   const startSel = $('#em-start-sel');
   const endSel   = $('#em-end-sel');
+  const todayISO = fmtDateISO(todayMidnight());
+  const now      = new Date();
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
 
   function getLimit(startMin) {
     let limit = cfg.END_HOUR * 60;
@@ -644,12 +685,21 @@ function buildEditTimeSelects(otherBks) {
     return limit;
   }
 
-  // ── 開始時間選單（標記已佔用時段）──
+  // ── 開始時間選單（標記已佔用、已過去時段）──
   startSel.innerHTML = SLOTS.map(s => {
     const sMin = timeToMin(s);
     const busy = otherBks.some(b => timeToMin(b.startTime) <= sMin && sMin < timeToMin(b.endTime));
-    return `<option value="${s}" ${s === emState.startTime ? 'selected' : ''} ${busy ? 'disabled' : ''}>${s}${busy ? '（已被佔用）' : ''}</option>`;
+    // 原本的開始時間即使已過仍可保留，讓進行中的會議能只調整結束時間
+    const keepOriginal = emState.date === emState.origDate && s === emState.origStart;
+    const past = emState.date === todayISO && sMin < nowMin && !keepOriginal;
+    const tag  = busy ? '（已被佔用）' : past ? '（已過）' : '';
+    return `<option value="${s}" ${s === emState.startTime ? 'selected' : ''} ${(busy || past) ? 'disabled' : ''}>${s}${tag}</option>`;
   }).join('');
+  // 若目前開始時間在新日期已被佔用或已過去，改選第一個可用時段
+  if (startSel.options[startSel.selectedIndex]?.disabled) {
+    const first = [...startSel.options].find(o => !o.disabled);
+    if (first) { startSel.value = first.value; emState.startTime = first.value; }
+  }
 
   function refreshEndSel() {
     const startMin = timeToMin(startSel.value);
@@ -728,7 +778,7 @@ function init() {
   $('#w-next').addEventListener('click', () => {
     const m = new Date(state.weekMonday); m.setDate(m.getDate() + 7); loadWeek(m);
   });
-  $('#w-today').addEventListener('click', () => loadWeek(getMondayOf(new Date())));
+  $('#w-today').addEventListener('click', () => loadWeek(getInitialMonday()));
   $('#bm-close-x').addEventListener('click', closeBmModal);
   $('#bm-cancel-btn').addEventListener('click', closeBmModal);
   $('#bm-overlay').addEventListener('click', e => { if (e.target === $('#bm-overlay')) closeBmModal(); });
@@ -746,7 +796,7 @@ function init() {
   initBmForm();
   initEditForm();
   initMyBookings();
-  loadWeek(getMondayOf(new Date()));
+  loadWeek(getInitialMonday());
 }
 
 document.addEventListener('DOMContentLoaded', init);

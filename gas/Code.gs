@@ -249,6 +249,10 @@ function createBooking(params) {
     const { roomId, roomName, date, startTime, endTime,
             dept, name, empId, title, email, attendees, note } = params;
 
+    if (isPastStart(date, startTime)) {
+      return { ok: false, error: '無法預約已過去的時段' };
+    }
+
     const existing = getBookings({ date, roomId }).bookings;
     const conflict = existing.some(b => startTime < b.endTime && endTime > b.startTime);
     if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
@@ -331,6 +335,16 @@ function updateBooking({ id, empId, roomId, date, startTime, endTime, name, dept
     }
     if (rowIdx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
 
+    if (String(data[rowIdx][COL.STATUS]) === 'cancelled') {
+      return { ok: false, error: '此預約已取消，無法修改' };
+    }
+    // 保留原開始時間時不檢查過去（進行中的會議可只調整結束時間）
+    const sameStart = toDateISO(data[rowIdx][COL.DATE]) === date &&
+                      toTimeStr(data[rowIdx][COL.START]) === startTime;
+    if (!sameStart && isPastStart(date, startTime)) {
+      return { ok: false, error: '無法將預約改到已過去的時段' };
+    }
+
     const existing = getBookings({ date, roomId }).bookings.filter(b => b.id !== id);
     const conflict = existing.some(b => startTime < b.endTime && endTime > b.startTime);
     if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
@@ -365,6 +379,14 @@ function getOrCreateBookingsSheet() {
   let sheet = ss.getSheetByName(SHEET_BOOKINGS);
   if (!sheet) sheet = ss.insertSheet(SHEET_BOOKINGS);
   return sheet;
+}
+
+function isPastStart(dateISO, startTime) {
+  const tz  = Session.getScriptTimeZone();
+  const now = new Date();
+  const nowISO = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const nowHM  = Utilities.formatDate(now, tz, 'HH:mm');
+  return dateISO < nowISO || (dateISO === nowISO && startTime < nowHM);
 }
 
 function toDateISO(val) {

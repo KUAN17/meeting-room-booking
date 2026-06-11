@@ -716,6 +716,13 @@ function init() {
   $('#em-cancel-btn').addEventListener('click', closeEditModal);
   $('#em-overlay').addEventListener('click', e => { if (e.target === $('#em-overlay')) closeEditModal(); });
   $('#modal-overlay').addEventListener('click', e => { if (e.target === $('#modal-overlay')) hideGenericModal(); });
+  $('#usage-toggle').addEventListener('click', () => {
+    const cards = $('#usage-cards');
+    const btn   = $('#usage-toggle');
+    const open  = cards.classList.toggle('hidden') === false;
+    btn.classList.toggle('open', open);
+    btn.textContent = open ? '✕ 收起說明' : '❓ 操作說明';
+  });
   initBmForm();
   initEditForm();
   initMyBookings();

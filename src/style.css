@@ -78,10 +78,20 @@ body {
   margin-bottom: 16px;
 }
 .week-nav { display: flex; align-items: center; gap: 10px; }
+.usage-toggle-bar { margin-bottom: 8px; margin-top: -4px; }
+.usage-toggle-btn {
+  background: none; border: 1.5px solid var(--gray-300);
+  border-radius: 20px; padding: 4px 14px;
+  font-size: .82rem; color: var(--gray-500); cursor: pointer;
+  transition: var(--transition);
+}
+.usage-toggle-btn:hover { border-color: var(--primary); color: var(--primary); }
+.usage-toggle-btn.open { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 .usage-cards {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin-bottom: 14px; margin-top: -4px;
+  margin-bottom: 14px;
 }
+.usage-cards.hidden { display: none; }
 @media (max-width: 640px) { .usage-cards { grid-template-columns: 1fr; } }
 .usage-card {
   background: #fff; border: 1px solid var(--gray-200);

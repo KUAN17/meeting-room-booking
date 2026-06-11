@@ -9,6 +9,11 @@ function pad(n) { return String(n).padStart(2, '0'); }
 function timeToMin(t) { const [h, m] = t.split(':'); return +h * 60 + +m; }
 function minToTime(m) { return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; }
 
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function todayMidnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function fmtDateISO(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function fmtDateDisplay(d) { return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`; }
@@ -74,6 +79,13 @@ async function apiGet(action, params = {}) {
 const mockDB = { bookings: JSON.parse(localStorage.getItem('mock_bk') || '[]') };
 function saveMock() { localStorage.setItem('mock_bk', JSON.stringify(mockDB.bookings)); }
 
+// 與 GAS 後端一致：公開清單不含 empId / email
+function toPublicBooking(b) {
+  const { empId, email, ...pub } = b;
+  return pub;
+}
+const sameEmpId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+
 async function mockApi(action, p) {
   await new Promise(r => setTimeout(r, 150));
   if (action === 'getWeekBookings') {
@@ -81,14 +93,14 @@ async function mockApi(action, p) {
       b.status !== 'cancelled' &&
       b.date >= p.startDate && b.date <= p.endDate &&
       (!p.roomId || b.roomId === p.roomId)
-    )};
+    ).map(toPublicBooking)};
   }
   if (action === 'getBookings') {
     return { ok: true, bookings: mockDB.bookings.filter(b =>
       b.status !== 'cancelled' &&
       (!p.date   || b.date   === p.date) &&
       (!p.roomId || b.roomId === p.roomId)
-    )};
+    ).map(toPublicBooking)};
   }
   if (action === 'getMyBookings') {
     return { ok: true, bookings: mockDB.bookings.filter(b => b.empId === p.empId) };
@@ -276,10 +288,10 @@ function renderWeekGrid(dates) {
         const rowspan = Math.round((endM - slotM) / 30);
         const isPast  = iso < todayISO || (iso === todayISO && slotM < nowMin);
         return `<td class="slot-booked${isPast ? ' past' : ''}${isHour ? ' hour-line' : ''}"
-                    rowspan="${rowspan}" data-bk-id="${bk.id}">
-          <div class="booked-name">${bk.name}</div>
-          <div class="booked-dept">${bk.dept || ''}</div>
-          <div class="booked-time">${bk.startTime}–${bk.endTime}</div>
+                    rowspan="${rowspan}" data-bk-id="${escapeHtml(bk.id)}">
+          <div class="booked-name">${escapeHtml(bk.name)}</div>
+          <div class="booked-dept">${escapeHtml(bk.dept || '')}</div>
+          <div class="booked-time">${escapeHtml(bk.startTime)}–${escapeHtml(bk.endTime)}</div>
         </td>`;
       }
       const isToday  = iso === todayISO;
@@ -485,7 +497,7 @@ async function doQuery() {
     renderMyList(myBookingsList);
   } catch (err) {
     hideLoading();
-    $('#my-list').innerHTML = `<p style="color:var(--gray-400);font-size:.9rem">查詢失敗：${err.message}</p>`;
+    $('#my-list').innerHTML = `<p style="color:var(--gray-400);font-size:.9rem">查詢失敗：${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -505,11 +517,11 @@ function renderMyList(bks) {
     const label   = { cancelled: '已取消', past: '已結束', active: '有效' }[status];
     return `<div class="booking-item">
       <div>
-        <div class="booking-item-title">${b.date} ${b.startTime}–${b.endTime}</div>
+        <div class="booking-item-title">${escapeHtml(b.date)} ${escapeHtml(b.startTime)}–${escapeHtml(b.endTime)}</div>
         <div class="booking-item-meta">
-          <span>👤 ${b.name}${b.dept ? '・' + b.dept : ''}</span>
-          <span>🆔 ${b.empId}</span>
-          ${b.note ? `<span>📝 ${b.note}</span>` : ''}
+          <span>👤 ${escapeHtml(b.name)}${b.dept ? '・' + escapeHtml(b.dept) : ''}</span>
+          <span>🆔 ${escapeHtml(b.empId)}</span>
+          ${b.note ? `<span>📝 ${escapeHtml(b.note)}</span>` : ''}
         </div>
       </div>
       <div class="booking-item-actions">
@@ -552,20 +564,23 @@ function renderMyList(bks) {
 const emState = {
   id: null, empId: null, roomId: null,
   date: null, startTime: null, endTime: null,
+  origDate: null, origStart: null,
   bookingsCache: {},
 };
 
 function openEditModal(bk, autoFill = false) {
   emState.id        = bk.id;
-  emState.empId     = bk.empId;
+  // 僅「我的預約」入口有 empId；週曆入口的資料不含員編，改由後端驗證
+  emState.empId     = bk.empId || null;
   emState.roomId    = bk.roomId || cfg.ROOM.id;
   emState.date      = bk.date;
   emState.startTime = bk.startTime;
   emState.endTime   = bk.endTime;
+  emState.origDate  = bk.date;
+  emState.origStart = bk.startTime;
   emState.bookingsCache = {};
 
   $('#em-name').value         = bk.name;
-  $('#em-empid').value        = bk.empId;
   $('#em-empid-verify').value = autoFill ? bk.empId : '';
 
   // 從「我的預約」進入：隱藏驗證欄位；從週曆進入：顯示
@@ -674,18 +689,18 @@ function initEditForm() {
     const empIdVerify = $('#em-empid-verify').value.trim();
     if (!name) { setEditMsg('請填寫姓名', 'error'); return; }
     if (!empIdVerify) { setEditMsg('請輸入員工編號以確認身份', 'error'); return; }
-    if (empIdVerify !== emState.empId) { setEditMsg('員工編號不符，無法儲存', 'error'); return; }
     if (timeToMin(endTime) <= timeToMin(startTime)) { setEditMsg('結束時間須晚於開始時間', 'error'); return; }
 
     showLoading();
     try {
+      // 員編驗證交給後端：id + empId 不符即拒絕，避免在前端暴露正確答案
       const res = await apiGet('updateBooking', {
-        id: emState.id, empId: emState.empId, roomId: emState.roomId,
+        id: emState.id, empId: empIdVerify, roomId: emState.roomId,
         date, startTime, endTime, name, dept, note,
       });
       hideLoading();
       if (res.ok) {
-        saveMemory(name, emState.empId, dept);
+        saveMemory(name, empIdVerify, dept);
         closeEditModal();
         showModal({
           icon: '✅', title: '修改成功！',

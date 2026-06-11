@@ -212,7 +212,8 @@ function getWeekBookings({ startDate, endDate, roomId }) {
     .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
     .filter(r => { const d = toDateISO(r[COL.DATE]); return d >= startDate && d <= endDate; })
     .filter(r => !roomId || String(r[COL.ROOM_ID]) === roomId)
-    .map(rowToObj);
+    .map(rowToObj)
+    .map(toPublicBooking);
   return { ok: true, bookings };
 }
 
@@ -222,7 +223,8 @@ function getBookings({ date, roomId }) {
     .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
     .filter(r => !date   || toDateISO(r[COL.DATE])  === date)
     .filter(r => !roomId || String(r[COL.ROOM_ID])  === roomId)
-    .map(rowToObj);
+    .map(rowToObj)
+    .map(toPublicBooking);
   return { ok: true, bookings };
 }
 
@@ -383,6 +385,14 @@ function toTimeStr(val) {
     return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
   }
   return String(val);
+}
+
+// 公開清單（週曆等）不可包含 empId / email：兩者是修改與取消的驗證憑證
+function toPublicBooking(b) {
+  const pub = Object.assign({}, b);
+  delete pub.empId;
+  delete pub.email;
+  return pub;
 }
 
 function rowToObj(r) {

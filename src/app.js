@@ -595,7 +595,7 @@ function renderMyList(bks) {
 
 /* ── 編輯 Modal ─────────────────────────────────────────────── */
 const emState = {
-  id: null, empId: null, roomId: null,
+  id: null, roomId: null,
   date: null, startTime: null, endTime: null,
   origDate: null, origStart: null,
   bookingsCache: {},
@@ -603,8 +603,6 @@ const emState = {
 
 function openEditModal(bk, autoFill = false) {
   emState.id        = bk.id;
-  // 僅「我的預約」入口有 empId；週曆入口的資料不含員編，改由後端驗證
-  emState.empId     = bk.empId || null;
   emState.roomId    = bk.roomId || cfg.ROOM.id;
   emState.date      = bk.date;
   emState.startTime = bk.startTime;

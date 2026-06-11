@@ -270,9 +270,11 @@ function createBooking(params) {
     row[COL.ATTENDEES] = attendees || '';
     row[COL.NOTE]      = note      || '';
     sheet.appendRow(row);
-    // 強制將 emp_id 欄設為文字格式，防止 Sheets 自動去除前導零
+    // appendRow 後 Sheets 已把前導零吃掉，需先設文字格式再重新寫入值
     const newRow = sheet.getLastRow();
-    sheet.getRange(newRow, COL.EMP_ID + 1).setNumberFormat('@');
+    const empIdCell = sheet.getRange(newRow, COL.EMP_ID + 1);
+    empIdCell.setNumberFormat('@');
+    empIdCell.setValue(empId || '');
     return { ok: true, bookingId: id };
   } catch (e) {
     if (e.message && e.message.includes('Lock')) {

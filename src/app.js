@@ -400,7 +400,7 @@ function buildTimeSelects() {
     // 衝突提示
     const warn = $('#dur-warn');
     if (limitMin < cfg.END_HOUR * 60) {
-      warn.textContent = `${minToTime(limitMin)} 起已有預約，結束時間最晚至 ${minToTime(limitMin)}`;
+      warn.textContent = `${minToTime(limitMin)} 起已有他人預約，結束時間最晚可選至 ${minToTime(limitMin)}`;
       warn.classList.remove('hidden');
     } else {
       warn.classList.add('hidden');
@@ -651,7 +651,7 @@ function buildEditTimeSelects(otherBks) {
     emState.endTime = endSel.value;
     const warn = $('#em-dur-warn');
     if (limitMin < cfg.END_HOUR * 60) {
-      warn.textContent = `${minToTime(limitMin)} 起已有預約，結束時間最晚至 ${minToTime(limitMin)}`;
+      warn.textContent = `${minToTime(limitMin)} 起已有他人預約，結束時間最晚可選至 ${minToTime(limitMin)}`;
       warn.classList.remove('hidden');
     } else { warn.classList.add('hidden'); }
   }

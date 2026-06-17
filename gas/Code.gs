@@ -212,8 +212,7 @@ function getWeekBookings({ startDate, endDate, roomId }) {
     .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
     .filter(r => { const d = toDateISO(r[COL.DATE]); return d >= startDate && d <= endDate; })
     .filter(r => !roomId || String(r[COL.ROOM_ID]) === roomId)
-    .map(rowToObj)
-    .map(toPublicBooking);
+    .map(rowToObj);
   return { ok: true, bookings };
 }
 
@@ -223,8 +222,7 @@ function getBookings({ date, roomId }) {
     .filter(r => r[COL.ID] && String(r[COL.STATUS]) !== 'cancelled')
     .filter(r => !date   || toDateISO(r[COL.DATE])  === date)
     .filter(r => !roomId || String(r[COL.ROOM_ID])  === roomId)
-    .map(rowToObj)
-    .map(toPublicBooking);
+    .map(rowToObj);
   return { ok: true, bookings };
 }
 
@@ -248,10 +246,6 @@ function createBooking(params) {
     lock.waitLock(10000);  // 最多等 10 秒
     const { roomId, roomName, date, startTime, endTime,
             dept, name, empId, title, email, attendees, note } = params;
-
-    if (isPastStart(date, startTime)) {
-      return { ok: false, error: '無法預約已過去的時段' };
-    }
 
     const existing = getBookings({ date, roomId }).bookings;
     const conflict = existing.some(b => startTime < b.endTime && endTime > b.startTime);
@@ -335,16 +329,6 @@ function updateBooking({ id, empId, roomId, date, startTime, endTime, name, dept
     }
     if (rowIdx === -1) return { ok: false, error: '找不到預約或員工編號不符' };
 
-    if (String(data[rowIdx][COL.STATUS]) === 'cancelled') {
-      return { ok: false, error: '此預約已取消，無法修改' };
-    }
-    // 保留原開始時間時不檢查過去（進行中的會議可只調整結束時間）
-    const sameStart = toDateISO(data[rowIdx][COL.DATE]) === date &&
-                      toTimeStr(data[rowIdx][COL.START]) === startTime;
-    if (!sameStart && isPastStart(date, startTime)) {
-      return { ok: false, error: '無法將預約改到已過去的時段' };
-    }
-
     const existing = getBookings({ date, roomId }).bookings.filter(b => b.id !== id);
     const conflict = existing.some(b => startTime < b.endTime && endTime > b.startTime);
     if (conflict) return { ok: false, error: '所選時段與現有預約衝突，請重新選擇' };
@@ -381,14 +365,6 @@ function getOrCreateBookingsSheet() {
   return sheet;
 }
 
-function isPastStart(dateISO, startTime) {
-  const tz  = Session.getScriptTimeZone();
-  const now = new Date();
-  const nowISO = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-  const nowHM  = Utilities.formatDate(now, tz, 'HH:mm');
-  return dateISO < nowISO || (dateISO === nowISO && startTime < nowHM);
-}
-
 function toDateISO(val) {
   if (val instanceof Date) {
     return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -407,14 +383,6 @@ function toTimeStr(val) {
     return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
   }
   return String(val);
-}
-
-// 公開清單（週曆等）不可包含 empId / email：兩者是修改與取消的驗證憑證
-function toPublicBooking(b) {
-  const pub = Object.assign({}, b);
-  delete pub.empId;
-  delete pub.email;
-  return pub;
 }
 
 function rowToObj(r) {

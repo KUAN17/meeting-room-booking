@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>測試室預約小工具</title>
+  <title>測試室預約系統</title>
   <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
@@ -27,8 +27,6 @@
 
 <main class="main">
 
-  <div id="quota-banner" class="quota-banner hidden">⚠️ 系統今日使用量偏高，若操作失敗請稍後再試</div>
-
   <!-- ── 預約會議 ── -->
   <section id="view-week" class="view active">
     <div class="week-toolbar">
@@ -48,7 +46,7 @@
         <ol>
           <li>點選週曆上的空白時段</li>
           <li>調整開始與結束時間</li>
-          <li>填入姓名、員編（部門選填）</li>
+          <li>填入姓名、員編、部門</li>
           <li>按「送出預約」</li>
         </ol>
       </div>
@@ -124,9 +122,9 @@
         </div>
       </div>
       <div class="form-group">
-        <label>部門</label>
-        <select id="f-dept">
-          <option value="">-- 請選擇部門（選填）--</option>
+        <label>部門 <span class="req">*</span></label>
+        <select id="f-dept" required>
+          <option value="">-- 請選擇部門 --</option>
           <option>用戶開發暨分眾經營部</option>
           <option>用戶維繫暨加值服務部</option>
           <option>訓練規劃管理部</option>
@@ -136,6 +134,7 @@
           <option>視覺設計部</option>
           <option>數位平台發展部</option>
           <option>公開暨顧客洞察部</option>
+          <option>通路分析應用部(測試用)</option>
         </select>
       </div>
       <div class="form-group">
@@ -190,6 +189,7 @@
     <p id="em-dur-warn" class="dur-warn hidden"></p>
 
     <form id="em-form" class="bm-form" novalidate>
+      <input id="em-empid" type="hidden" />
       <div class="form-row">
         <div class="form-group">
           <label>姓名 <span class="req">*</span></label>
@@ -201,9 +201,9 @@
         </div>
       </div>
       <div class="form-group">
-        <label>部門</label>
-        <select id="em-dept">
-          <option value="">-- 請選擇部門（選填）--</option>
+        <label>部門 <span class="req">*</span></label>
+        <select id="em-dept" required>
+          <option value="">-- 請選擇部門 --</option>
           <option>用戶開發暨分眾經營部</option>
           <option>用戶維繫暨加值服務部</option>
           <option>訓練規劃管理部</option>
@@ -213,6 +213,7 @@
           <option>視覺設計部</option>
           <option>數位平台發展部</option>
           <option>公開暨顧客洞察部</option>
+          <option>通路分析應用部(測試用)</option>
         </select>
       </div>
       <div class="form-group">

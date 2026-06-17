@@ -152,17 +152,12 @@ function navigate(view) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
 }
 
-/* ── 截止日計算（今日 +2 個工作日，排除週六日）──────────────── */
+/* ── 截止日計算（下週五）────────────────────────────────────── */
 function getDeadlineISO() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  let added = 0;
-  while (added < 2) {
-    d.setDate(d.getDate() + 1);
-    const day = d.getDay();
-    if (day !== 0 && day !== 6) added++;
-  }
-  return fmtDateISO(d);
+  const monday = getMondayOf(new Date());       // 本週週一
+  const nextFri = new Date(monday);
+  nextFri.setDate(monday.getDate() + 7 + 4);   // +7 = 下週一, +4 = 下週五
+  return fmtDateISO(nextFri);
 }
 
 /* ── 週曆：載入 ──────────────────────────────────────────────── */
@@ -230,7 +225,7 @@ function renderWeekGrid(dates) {
   // 更新說明文字（只填入日期片段，句構由 HTML 控制）
   const dl = new Date(deadlineISO + 'T00:00:00');
   $('#w-deadline-notice').textContent =
-    `可預約時段：今日起至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（最晚可約）`;
+    `可預約時段：今日起至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）`;
 
   // 更新下週按鈕：若下週一已超出截止日則 disable
   const nextMonday = new Date(state.weekMonday);
@@ -315,7 +310,7 @@ function renderWeekGrid(dates) {
       const dl = new Date(deadlineISO + 'T00:00:00');
       const msg = td.dataset.date < todayISO
         ? '此時段已過期，無法預約。'
-        : `超出可預約範圍，僅開放至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（今日起 +2 個工作日）。`;
+        : `超出可預約範圍，僅開放至 ${pad(dl.getMonth()+1)}/${pad(dl.getDate())}（下週五）。`;
       showModal({ icon: '🚫', title: '無法預約', body: msg });
     });
   });
@@ -433,7 +428,6 @@ function initBmForm() {
     const note  = $('#f-note').value.trim();
 
     if (!name || !empId) { setMsg('請填寫姓名與員工編號', 'error'); return; }
-    if (!dept) { setMsg('請選擇部門', 'error'); return; }
 
     const startTime = $('#bm-start-sel').value;
     const endTime   = $('#bm-end-sel').value;
@@ -679,7 +673,6 @@ function initEditForm() {
 
     const empIdVerify = $('#em-empid-verify').value.trim();
     if (!name) { setEditMsg('請填寫姓名', 'error'); return; }
-    if (!dept) { setEditMsg('請選擇部門', 'error'); return; }
     if (!empIdVerify) { setEditMsg('請輸入員工編號以確認身份', 'error'); return; }
     if (empIdVerify !== emState.empId) { setEditMsg('員工編號不符，無法儲存', 'error'); return; }
     if (timeToMin(endTime) <= timeToMin(startTime)) { setEditMsg('結束時間須晚於開始時間', 'error'); return; }

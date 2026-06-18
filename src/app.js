@@ -152,11 +152,11 @@ function navigate(view) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
 }
 
-/* ── 截止日計算（今日起算 +2 個工作日，排除週六日）──────────── */
+/* ── 截止日計算（今日起算 +5 個工作日，排除週六日）──────────── */
 function getDeadlineISO() {
   const d = todayMidnight();
   let added = 0;
-  while (added < 2) {
+  while (added < 5) {
     d.setDate(d.getDate() + 1);
     const day = d.getDay();
     if (day !== 0 && day !== 6) added++;   // 略過週日(0)與週六(6)
@@ -223,7 +223,7 @@ function renderWeekGrid(dates) {
   const nowMin   = now.getHours() * 60 + now.getMinutes();
   const DAY_NAMES = ['週一','週二','週三','週四','週五'];
 
-  // 截止日 = 今日起算 +2 個工作日（排除週六日）
+  // 截止日 = 今日起算 +5 個工作日（排除週六日）
   const deadlineISO = getDeadlineISO();
 
   // 更新說明文字（保留實際日期）
